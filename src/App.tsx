@@ -6,7 +6,7 @@ import SignUpPage from './SignUpPage'
 import { Input } from './components/ui/input'
 import { Button } from './components/ui/button'
 import { decrypt, encrypt } from './lib/crypto'
-import { SendIcon } from 'lucide-react'
+import { SendIcon, XIcon } from 'lucide-react'
 import type { Message as IMessage, WSMsgData } from './types/message'
 
 function App() {
@@ -14,6 +14,7 @@ function App() {
     const saveTimerRef = React.useRef<number | null>(null)
     const [messages, setMessages] = React.useState<IMessage[]>([])
     const [sendMessage, setSendMessage] = React.useState('')
+    const [quoteMessage, setQuoteMessage] = React.useState<IMessage | null>(null)
     const [isSending, setIsSending] = React.useState(false)
 
     const currentUsername = localStorage.getItem('username')
@@ -70,12 +71,32 @@ function App() {
                             user: msg.name,
                             msg: msg.content,
                             time: formatTime(msg.time),
+                            quote: msg.quote,
                         }}
                         isCurrentUser={msg.name === currentUsername}
+                        setQuoteMessage={setQuoteMessage}
                     />
                 ))}
             </ScrollArea>
             <div className="p-3 flex flex-col bg-white border-t shrink-0 max-h-45 overflow-y-auto">
+                {quoteMessage && (
+                    <div className="relative text-xs p-2 mb-2 rounded border-l-4 bg-slate-50 border-slate-400 text-slate-800">
+                        <p className="font-bold mb-0.5">@{quoteMessage.name}</p>
+                        <div className="prose prose-sm max-w-none max-h-24 overflow-y-auto prose-p:my-0 prose-headings:my-1 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-pre:my-1">
+                            {quoteMessage.content}
+                        </div>
+                        <Button
+                            size="icon-xs"
+                            className="absolute top-1 right-1"
+                            onClick={() => {
+                                setQuoteMessage(null);
+                            }}
+                        >
+                            <XIcon />
+                        </Button>
+                    </div>
+                )}
+
                 <div className="flex gap-2 items-center shrink-0">
                     <Input
                         placeholder="请输入文本"
@@ -93,6 +114,7 @@ function App() {
                                     const encrypted = await encrypt(
                                         JSON.stringify({
                                             content: sendMessage,
+                                            quote: quoteMessage,
                                         }),
                                         currentRoom,
                                     )
@@ -103,6 +125,7 @@ function App() {
                                             }),
                                         )
                                     setSendMessage('')
+                                    setQuoteMessage(null)
                                 } finally {
                                     setIsSending(false)
                                 }
