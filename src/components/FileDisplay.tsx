@@ -1,32 +1,28 @@
-import { useState } from 'react'
-import { cn } from '@/lib/utils'
-import { DownloadIcon, FileAudioIcon, FileTextIcon, XIcon } from 'lucide-react'
-import {
-    Dialog,
-    DialogContent,
-    DialogTrigger,
-} from '@/components/ui/dialog'
-import type { Attachment } from '@/types/message'
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { DownloadIcon, FileAudioIcon, FileTextIcon, XIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import type { Attachment } from '@/types/message';
 
 interface FileDisplayProps {
-    fileData: Attachment
-    isCurrentUser?: boolean
-    compact?: boolean
-    deleteable?: boolean
-    onDelete?: (filedata: Attachment) => void
+    fileData: Attachment;
+    isCurrentUser?: boolean;
+    compact?: boolean;
+    deleteable?: boolean;
+    onDelete?: (filedata: Attachment) => void;
 }
 
 function checkFileExtension(
     filename: string,
     allowedExtensions: string[],
 ): boolean {
-    if (!filename || filename.length === 0) return false
-    const ext = filename.split('.').pop()
+    if (!filename || filename.length === 0) return false;
+    const ext = filename.split('.').pop();
     return (
         ext !== undefined &&
         ext !== null &&
         allowedExtensions.includes(ext.toLowerCase())
-    )
+    );
 }
 
 function isImageFile(filename: string): boolean {
@@ -38,41 +34,47 @@ function isImageFile(filename: string): boolean {
         'webp',
         'bmp',
         'svg',
-    ])
+    ]);
 }
 
 function isAudioFile(filename: string): boolean {
-    return checkFileExtension(filename, ['mp3', 'wav', 'ogg', 'aac', 'flac'])
+    return checkFileExtension(filename, ['mp3', 'wav', 'ogg', 'aac', 'flac']);
 }
 
 function isVideoFile(filename: string): boolean {
-    return checkFileExtension(filename, ['mp4', 'webm', 'ogg', 'avi', 'mkv'])
+    return checkFileExtension(filename, ['mp4', 'webm', 'ogg', 'avi', 'mkv']);
 }
 
-export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDelete }: FileDisplayProps) => {
-    const [imageError, setImageError] = useState(false)
-    const [audioError, setAudioError] = useState(false)
-    const [videoError, setVideoError] = useState(false)
-    const [previewOpen, setPreviewOpen] = useState(false)
+export const FileDisplay = ({
+    fileData,
+    isCurrentUser,
+    compact,
+    deleteable,
+    onDelete,
+}: FileDisplayProps) => {
+    const [imageError, setImageError] = useState(false);
+    const [audioError, setAudioError] = useState(false);
+    const [videoError, setVideoError] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
 
     function resetImageError() {
-        setImageError(false)
+        setImageError(false);
     }
     function resetAudioError() {
-        setAudioError(false)
+        setAudioError(false);
     }
     function resetVideoError() {
-        setVideoError(false)
+        setVideoError(false);
     }
 
     const downloadUrl =
         fileData.link && fileData.link.includes('python_assets/')
             ? `https://livefile.xesimg.com/programme/python_assets/844958913c304c040803a9d7f79f898e.html?name=${fileData.name}&file=${fileData.link.split('python_assets/')[1]}`
-            : ''
+            : '';
 
-    const isImage = isImageFile(fileData.name) && !imageError
-    const isAudio = isAudioFile(fileData.name) && !audioError
-    const isVideo = isVideoFile(fileData.name) && !videoError
+    const isImage = isImageFile(fileData.name) && !imageError;
+    const isAudio = isAudioFile(fileData.name) && !audioError;
+    const isVideo = isVideoFile(fileData.name) && !videoError;
 
     return (
         <div
@@ -95,7 +97,7 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                                         'rounded-2xl object-contain cursor-zoom-in',
                                     )}
                                     onError={() => {
-                                        setImageError(true)
+                                        setImageError(true);
                                     }}
                                     onLoad={resetImageError}
                                 />
@@ -112,7 +114,7 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                                             : 'rounded-br-2xl',
                                     )}
                                     onError={() => {
-                                        setVideoError(true)
+                                        setVideoError(true);
                                     }}
                                     onLoad={resetVideoError}
                                 />
@@ -148,7 +150,7 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => {
-                            e.stopPropagation()
+                            e.stopPropagation();
                         }}
                     >
                         <DownloadIcon size={18} />
@@ -163,8 +165,8 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                             )}
                             title="删除"
                             onClick={(e) => {
-                                e.stopPropagation()
-                                onDelete && onDelete(fileData)
+                                e.stopPropagation();
+                                onDelete && onDelete(fileData);
                             }}
                         >
                             <XIcon size={18} />
@@ -233,7 +235,8 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                             <a
                                 className={cn(
                                     'rounded transition-colors shrink-0 cursor-pointer',
-                                    isCurrentUser && 'text-white dark:text-black',
+                                    isCurrentUser &&
+                                        'text-white dark:text-black',
                                 )}
                                 title="删除"
                                 onClick={() => onDelete && onDelete(fileData)}
@@ -251,7 +254,7 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                                 isCurrentUser ? 'bg-white/10' : 'bg-background',
                             )}
                             onError={() => {
-                                setAudioError(true)
+                                setAudioError(true);
                             }}
                             onLoad={resetAudioError}
                         />
@@ -259,5 +262,5 @@ export const FileDisplay = ({ fileData, isCurrentUser, compact, deleteable, onDe
                 </div>
             )}
         </div>
-    )
-}
+    );
+};

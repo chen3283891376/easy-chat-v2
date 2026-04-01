@@ -1,13 +1,13 @@
-import { useState } from 'react'
-import { toast } from 'sonner'
+import { useState } from 'react';
+import { toast } from 'sonner';
 import {
     calcFileMD5,
     getOSSUploadParams,
     formatFileSize,
     type UploadParam,
-} from '@/lib/upload/utils'
-import { UploadFile } from '@/lib/upload/upload'
-import type { Attachment } from '@/types/message'
+} from '@/lib/upload/utils';
+import { UploadFile } from '@/lib/upload/upload';
+import type { Attachment } from '@/types/message';
 
 /**
  * 文件上传自定义 Hook
@@ -33,9 +33,9 @@ import type { Attachment } from '@/types/message'
  * <button onClick={cancel} disabled={!isUploading}>取消上传</button>
  */
 export function useFileUpload() {
-    const [isUploading, setIsUploading] = useState(false)
-    const [uploadProgress, setUploadProgress] = useState(0)
-    const [abortUpload, setAbortUpload] = useState<(() => void) | null>(null)
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [abortUpload, setAbortUpload] = useState<(() => void) | null>(null);
 
     /**
      * 执行文件上传
@@ -53,44 +53,44 @@ export function useFileUpload() {
      */
     async function upload(file: File): Promise<Attachment> {
         try {
-            setIsUploading(true)
-            setUploadProgress(0)
+            setIsUploading(true);
+            setUploadProgress(0);
 
             // 计算文件 MD5，用于唯一标识和去重
-            const md5 = await calcFileMD5(file)
+            const md5 = await calcFileMD5(file);
             // 获取 OSS 上传所需的签名参数
-            const params = await getOSSUploadParams(file.name, md5)
-            const uploadParam: UploadParam = params as unknown as UploadParam
+            const params = await getOSSUploadParams(file.name, md5);
+            const uploadParam: UploadParam = params as unknown as UploadParam;
 
             // 监听进度和取消事件
             const { promise, abort } = UploadFile(file, uploadParam, {
                 onProgress: setUploadProgress,
                 onAbort: () => toast.info('上传已取消'),
-            })
+            });
 
             // 保存取消函数
-            setAbortUpload(() => abort)
-            await promise
+            setAbortUpload(() => abort);
+            await promise;
 
             // 提取扩展名并拼接访问链接
-            const ext = file.name.split('.').pop()
-            const link = `https://livefile.xesimg.com/programme/python_assets/${md5}${ext?.length ? `.${ext}` : ''}`
+            const ext = file.name.split('.').pop();
+            const link = `https://livefile.xesimg.com/programme/python_assets/${md5}${ext?.length ? `.${ext}` : ''}`;
 
-            toast.success('上传成功')
+            toast.success('上传成功');
             return {
                 name: file.name,
                 link,
                 size: formatFileSize(file.size),
                 time: new Date().toLocaleString(),
-            } as Attachment
+            } as Attachment;
         } catch (error) {
-            toast.error((error as Error)?.message ?? '上传失败')
-            throw error
+            toast.error((error as Error)?.message ?? '上传失败');
+            throw error;
         } finally {
             // 重置上传状态
-            setIsUploading(false)
-            setUploadProgress(0)
-            setAbortUpload(null)
+            setIsUploading(false);
+            setUploadProgress(0);
+            setAbortUpload(null);
         }
     }
 
@@ -101,7 +101,7 @@ export function useFileUpload() {
      */
     function cancel() {
         if (abortUpload) {
-            abortUpload()
+            abortUpload();
         }
     }
 
@@ -110,5 +110,5 @@ export function useFileUpload() {
         cancel,
         isUploading,
         uploadProgress,
-    }
+    };
 }

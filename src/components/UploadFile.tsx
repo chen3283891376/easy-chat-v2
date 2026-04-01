@@ -1,12 +1,15 @@
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field.tsx";
-import { Input } from "@/components/ui/input.tsx";
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field.tsx';
+import { Input } from '@/components/ui/input.tsx';
 
 interface UploadFileProps {
     setSelectedFile: (value: File | null) => void;
     disabled?: boolean;
 }
 
-export default function UploadFile({ setSelectedFile, disabled }: UploadFileProps) {
+export default function UploadFile({
+    setSelectedFile,
+    disabled,
+}: UploadFileProps) {
     return (
         <div>
             <Field>

@@ -1,29 +1,29 @@
-import { Avatar, AvatarFallback } from './ui/avatar'
-import { QuoteIcon, User, UndoIcon } from 'lucide-react'
-import type { Attachment, Message as IMessage } from '@/types/message'
-import { cn } from '@/lib/utils'
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { QuoteIcon, User, UndoIcon } from 'lucide-react';
+import type { Attachment, Message as IMessage } from '@/types/message';
+import { cn } from '@/lib/utils';
 import {
     ContextMenu,
     ContextMenuContent,
     ContextMenuGroup,
     ContextMenuItem,
     ContextMenuTrigger,
-} from './ui/context-menu'
-import { FileDisplay } from './FileDisplay'
+} from './ui/context-menu';
+import { FileDisplay } from './FileDisplay';
 
 interface MessageProps {
     message: {
-        id: string
-        user: string
-        msg: string
-        time: Date
-        quote?: IMessage
-        recalled?: boolean
-        attachments?: Attachment[]
-    }
-    isCurrentUser: boolean
-    setQuoteMessage?: (message: IMessage | null) => void
-    recallMessage?: (messageId: string) => void
+        id: string;
+        user: string;
+        msg: string;
+        time: Date;
+        quote?: IMessage;
+        recalled?: boolean;
+        attachments?: Attachment[];
+    };
+    isCurrentUser: boolean;
+    setQuoteMessage?: (message: IMessage | null) => void;
+    recallMessage?: (messageId: string) => void;
 }
 
 export function MessageBuddle({
@@ -32,8 +32,8 @@ export function MessageBuddle({
     setQuoteMessage,
     recallMessage,
 }: MessageProps) {
-    const { id, user, msg, time, recalled, attachments } = message
-    const formattedTime = time.toLocaleTimeString()
+    const { id, user, msg, time, recalled, attachments } = message;
+    const formattedTime = time.toLocaleTimeString();
 
     return (
         <div
@@ -109,13 +109,20 @@ export function MessageBuddle({
                                             <p className="text-sm wrap-break-word whitespace-pre-wrap">
                                                 {msg}
                                             </p>
-                                            {attachments && attachments.map((attachment, index) => (
-                                                <FileDisplay
-                                                    key={index}
-                                                    fileData={attachment}
-                                                    isCurrentUser={isCurrentUser}
-                                                />
-                                            ))}
+                                            {attachments &&
+                                                attachments.map(
+                                                    (attachment, index) => (
+                                                        <FileDisplay
+                                                            key={index}
+                                                            fileData={
+                                                                attachment
+                                                            }
+                                                            isCurrentUser={
+                                                                isCurrentUser
+                                                            }
+                                                        />
+                                                    ),
+                                                )}
                                         </div>
                                     ) : (
                                         <span className="px-3 text-gray-500 text-sm whitespace-nowrap">
@@ -165,5 +172,5 @@ export function MessageBuddle({
                 </div>
             </div>
         </div>
-    )
+    );
 }

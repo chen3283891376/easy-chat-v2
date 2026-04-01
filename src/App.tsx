@@ -1,47 +1,55 @@
-import React from 'react'
-import { MessageBuddle } from './components/MessageBuddle'
-import { formatTime } from './lib/utils'
-import { ScrollArea } from './components/ui/scroll-area'
-import SignUpPage from './SignUpPage'
-import { Input } from './components/ui/input'
-import { Button } from './components/ui/button'
-import { decrypt, encrypt } from './lib/crypto'
-import { FileUpIcon, SendIcon, XIcon } from 'lucide-react'
+import React from 'react';
+import { MessageBuddle } from './components/MessageBuddle';
+import { formatTime } from './lib/utils';
+import { ScrollArea } from './components/ui/scroll-area';
+import SignUpPage from './SignUpPage';
+import { Input } from './components/ui/input';
+import { Button } from './components/ui/button';
+import { decrypt, encrypt } from './lib/crypto';
+import { FileUpIcon, SendIcon, XIcon } from 'lucide-react';
 import type {
     Attachment,
     Message as IMessage,
     WSMsgData,
-} from './types/message'
-import { FileDisplay } from './components/FileDisplay'
-import { useFileUpload } from './hooks/useFileUpload'
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog'
-import UploadFile from './components/UploadFile'
-import { Progress } from './components/ui/progress'
+} from './types/message';
+import { FileDisplay } from './components/FileDisplay';
+import { useFileUpload } from './hooks/useFileUpload';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from './components/ui/dialog';
+import UploadFile from './components/UploadFile';
+import { Progress } from './components/ui/progress';
 
 function App() {
-    const wsRef = React.useRef<WebSocket | null>(null)
-    const saveTimerRef = React.useRef<number | null>(null)
-    const [messages, setMessages] = React.useState<IMessage[]>([])
-    const [sendMessage, setSendMessage] = React.useState('')
+    const wsRef = React.useRef<WebSocket | null>(null);
+    const saveTimerRef = React.useRef<number | null>(null);
+    const [messages, setMessages] = React.useState<IMessage[]>([]);
+    const [sendMessage, setSendMessage] = React.useState('');
     const [quoteMessage, setQuoteMessage] = React.useState<IMessage | null>(
         null,
-    )
-    const [attachments, setAttachments] = React.useState<Attachment[]>([])
-    const [isSending, setIsSending] = React.useState(false)
+    );
+    const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+    const [isSending, setIsSending] = React.useState(false);
 
-    const { upload, isUploading, uploadProgress } = useFileUpload()
+    const { upload, isUploading, uploadProgress } = useFileUpload();
     const [open, setOpen] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
 
     const genMessageId = () =>
-        `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+        `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 
-    const currentUsername = localStorage.getItem('username')
+    const currentUsername = localStorage.getItem('username');
     const currentRoom =
-        new URLSearchParams(window.location.search).get('room') || 123456789
+        new URLSearchParams(window.location.search).get('room') || 123456789;
 
     if (!currentUsername) {
-        return SignUpPage()
+        return SignUpPage();
     }
 
     const recallMessage = async (messageId: string) => {
@@ -49,33 +57,33 @@ function App() {
             prev.map((msg) =>
                 msg.id === messageId ? { ...msg, recalled: true } : msg,
             ),
-        )
+        );
 
         try {
-            const recallPayload = { recall: true, id: messageId }
+            const recallPayload = { recall: true, id: messageId };
             const encrypted = await encrypt(
                 JSON.stringify(recallPayload),
                 currentRoom,
-            )
+            );
             !wsRef.current?.CONNECTING &&
-                wsRef.current?.send(JSON.stringify({ msg: encrypted }))
+                wsRef.current?.send(JSON.stringify({ msg: encrypted }));
         } catch (e) {
-            console.error('recall send failed', e)
+            console.error('recall send failed', e);
         }
-    }
+    };
     React.useEffect(() => {
-        const ws = new WebSocket('wss://ws.asilu.com:8090/')
-        wsRef.current = ws
+        const ws = new WebSocket('wss://ws.asilu.com:8090/');
+        wsRef.current = ws;
         ws.onopen = () => {
-            ws.send(JSON.stringify({ name: currentUsername }))
-        }
+            ws.send(JSON.stringify({ name: currentUsername }));
+        };
         ws.onmessage = async (event) => {
-            const data: WSMsgData = JSON.parse(event.data)
+            const data: WSMsgData = JSON.parse(event.data);
             if (data.msg) {
                 try {
                     const parsed = JSON.parse(
                         await decrypt(data.msg.content, currentRoom),
-                    )
+                    );
 
                     if (parsed && parsed.recall && parsed.id) {
                         setMessages((prev) =>
@@ -84,12 +92,12 @@ function App() {
                                     ? { ...m, recalled: true }
                                     : m,
                             ),
-                        )
-                        return
+                        );
+                        return;
                     }
 
-                    const content: IMessage = parsed
-                    const decryptedContent = content.content
+                    const content: IMessage = parsed;
+                    const decryptedContent = content.content;
                     setMessages((prev) => [
                         ...prev,
                         {
@@ -100,51 +108,54 @@ function App() {
                             quote: content.quote,
                             attachments: content.attachments,
                         },
-                    ])
+                    ]);
                 } catch (err) {
                     // 说明不是这个房间的消息或解密失败，忽略
                     // console.error('ws message handle error', err)
                 }
             }
-        }
+        };
 
         return () => {
-            ws.close()
+            ws.close();
             if (saveTimerRef.current) {
-                clearInterval(saveTimerRef.current)
+                clearInterval(saveTimerRef.current);
             }
-        }
-    }, [currentRoom, currentUsername])
+        };
+    }, [currentRoom, currentUsername]);
 
     const handleSend = async () => {
-        if ((sendMessage.trim() !== '' || attachments.length !== 0) && !isSending) {
-            setIsSending(true)
+        if (
+            (sendMessage.trim() !== '' || attachments.length !== 0) &&
+            !isSending
+        ) {
+            setIsSending(true);
             try {
                 const messagePayload = {
                     id: genMessageId(),
                     content: sendMessage,
                     quote: quoteMessage,
                     attachments,
-                }
+                };
 
                 const encrypted = await encrypt(
                     JSON.stringify(messagePayload),
                     currentRoom,
-                )
+                );
                 !wsRef.current?.CONNECTING &&
                     wsRef.current?.send(
                         JSON.stringify({
                             msg: encrypted,
                         }),
-                    )
-                setSendMessage('')
-                setQuoteMessage(null)
-                setAttachments([])
+                    );
+                setSendMessage('');
+                setQuoteMessage(null);
+                setAttachments([]);
             } finally {
-                setIsSending(false)
+                setIsSending(false);
             }
         }
-    }
+    };
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
@@ -155,7 +166,7 @@ function App() {
 
         try {
             const data = await upload(selectedFile);
-            setAttachments((prev) => [...prev, data])
+            setAttachments((prev) => [...prev, data]);
 
             setOpen(false);
         } catch {
@@ -196,7 +207,9 @@ function App() {
                             compact
                             deleteable
                             onDelete={(file) => {
-                                setAttachments((prev) => prev.filter((f) => f !== file))
+                                setAttachments((prev) =>
+                                    prev.filter((f) => f !== file),
+                                );
                             }}
                         />
                     ))}
@@ -211,7 +224,7 @@ function App() {
                             size="icon-xs"
                             className="absolute top-1 right-1"
                             onClick={() => {
-                                setQuoteMessage(null)
+                                setQuoteMessage(null);
                             }}
                         >
                             <XIcon />
@@ -277,8 +290,8 @@ function App() {
                         onChange={(e) => setSendMessage(e.target.value)}
                         onKeyDown={async (e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault()
-                                handleSend()
+                                e.preventDefault();
+                                handleSend();
                             }
                         }}
                         disabled={isSending}
@@ -286,14 +299,18 @@ function App() {
                     <Button
                         size={'icon-sm'}
                         onClick={handleSend}
-                        disabled={isSending || (sendMessage.trim().length === 0 && attachments.length === 0)}
+                        disabled={
+                            isSending ||
+                            (sendMessage.trim().length === 0 &&
+                                attachments.length === 0)
+                        }
                     >
                         <SendIcon className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
         </div>
-    )
+    );
 }
 
-export default App
+export default App;
