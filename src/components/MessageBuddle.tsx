@@ -1,8 +1,15 @@
 import { Avatar, AvatarFallback } from './ui/avatar'
 import { QuoteIcon, User, UndoIcon } from 'lucide-react'
-import type { Message as IMessage } from '@/types/message'
+import type { Attachment, Message as IMessage } from '@/types/message'
 import { cn } from '@/lib/utils'
-import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu'
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuGroup,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from './ui/context-menu'
+import { FileDisplay } from './FileDisplay'
 
 interface MessageProps {
     message: {
@@ -12,14 +19,20 @@ interface MessageProps {
         time: Date
         quote?: IMessage
         recalled?: boolean
+        attachments?: Attachment[]
     }
-    isCurrentUser: boolean;
-    setQuoteMessage?: (message: IMessage | null) => void;
-    recallMessage?: (messageId: string) => void;
+    isCurrentUser: boolean
+    setQuoteMessage?: (message: IMessage | null) => void
+    recallMessage?: (messageId: string) => void
 }
 
-export function MessageBuddle({ message, isCurrentUser, setQuoteMessage, recallMessage }: MessageProps) {
-    const { id, user, msg, time, recalled } = message
+export function MessageBuddle({
+    message,
+    isCurrentUser,
+    setQuoteMessage,
+    recallMessage,
+}: MessageProps) {
+    const { id, user, msg, time, recalled, attachments } = message
     const formattedTime = time.toLocaleTimeString()
 
     return (
@@ -79,10 +92,10 @@ export function MessageBuddle({ message, isCurrentUser, setQuoteMessage, recallM
                                             {message.quote && (
                                                 <div
                                                     className={cn(
-                                                        "text-xs p-2 mb-2 rounded border-l-4 overflow-hidden",
+                                                        'text-xs p-2 mb-2 rounded border-l-4 overflow-hidden',
                                                         isCurrentUser
-                                                            ? "bg-indigo-900/30 border-indigo-400 text-indigo-100"
-                                                            : "bg-slate-50 border-slate-400 text-slate-800",
+                                                            ? 'bg-indigo-900/30 border-indigo-400 text-indigo-100'
+                                                            : 'bg-slate-50 border-slate-400 text-slate-800',
                                                     )}
                                                 >
                                                     <p className="font-bold mb-0.5">
@@ -96,6 +109,13 @@ export function MessageBuddle({ message, isCurrentUser, setQuoteMessage, recallM
                                             <p className="text-sm wrap-break-word whitespace-pre-wrap">
                                                 {msg}
                                             </p>
+                                            {attachments && attachments.map((attachment, index) => (
+                                                <FileDisplay
+                                                    key={index}
+                                                    fileData={attachment}
+                                                    isCurrentUser={isCurrentUser}
+                                                />
+                                            ))}
                                         </div>
                                     ) : (
                                         <span className="px-3 text-gray-500 text-sm whitespace-nowrap">
@@ -103,26 +123,36 @@ export function MessageBuddle({ message, isCurrentUser, setQuoteMessage, recallM
                                         </span>
                                     )}
                                 </ContextMenuTrigger>
-                                <ContextMenuContent 
+                                <ContextMenuContent
                                     side="bottom"
                                     style={{
-                                        display: message.recalled ? 'none' : 'block'
+                                        display: message.recalled
+                                            ? 'none'
+                                            : 'block',
                                     }}
                                 >
                                     <ContextMenuGroup>
                                         {!recalled && (
-                                            <ContextMenuItem onClick={() => setQuoteMessage?.({
-                                                id,
-                                                name: user,
-                                                content: msg,
-                                                time: time.getTime(),
-                                            })}>
+                                            <ContextMenuItem
+                                                onClick={() =>
+                                                    setQuoteMessage?.({
+                                                        id,
+                                                        name: user,
+                                                        content: msg,
+                                                        time: time.getTime(),
+                                                    })
+                                                }
+                                            >
                                                 <QuoteIcon />
                                                 引用
                                             </ContextMenuItem>
                                         )}
                                         {isCurrentUser && !recalled && (
-                                            <ContextMenuItem onClick={() => recallMessage?.(id)}>
+                                            <ContextMenuItem
+                                                onClick={() =>
+                                                    recallMessage?.(id)
+                                                }
+                                            >
                                                 <UndoIcon />
                                                 撤回
                                             </ContextMenuItem>

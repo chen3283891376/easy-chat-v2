@@ -6,6 +6,13 @@ export interface WSMsgData {
     }
 }
 
+export interface Attachment {
+    name: string
+    link: string
+    size: string
+    time: string
+}
+
 export interface Message {
     id: string
     name: string
@@ -13,4 +20,5 @@ export interface Message {
     time: number
     quote?: Message
     recalled?: boolean
+    attachments?: Attachment[]
 }

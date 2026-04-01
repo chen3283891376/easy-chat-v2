@@ -13,11 +13,11 @@ export default defineConfig({
     },
     server: {
         proxy: {
-            '/api': {
-                target: 'https://code.xueersi.com',
+            "/xes/api": {
+                target: "https://code.xueersi.com/api",
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, ''),
+                rewrite: (url) => url.replace(/^\/xes\/api/, ""),
             },
         },
-    }
+    },
 })
