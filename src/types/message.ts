@@ -7,8 +7,10 @@ export interface WSMsgData {
 }
 
 export interface Message {
+    id: string
     name: string
     content: string
     time: number
     quote?: Message
+    recalled?: boolean
 }

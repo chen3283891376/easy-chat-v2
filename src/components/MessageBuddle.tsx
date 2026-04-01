@@ -1,22 +1,25 @@
 import { Avatar, AvatarFallback } from './ui/avatar'
-import { QuoteIcon, User } from 'lucide-react'
+import { QuoteIcon, User, UndoIcon } from 'lucide-react'
 import type { Message as IMessage } from '@/types/message'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuTrigger } from './ui/context-menu'
 
 interface MessageProps {
     message: {
+        id: string
         user: string
         msg: string
         time: Date
         quote?: IMessage
+        recalled?: boolean
     }
     isCurrentUser: boolean;
     setQuoteMessage?: (message: IMessage | null) => void;
+    recallMessage?: (messageId: string) => void;
 }
 
-export function MessageBuddle({ message, isCurrentUser, setQuoteMessage }: MessageProps) {
-    const { user, msg, time } = message
+export function MessageBuddle({ message, isCurrentUser, setQuoteMessage, recallMessage }: MessageProps) {
+    const { id, user, msg, time, recalled } = message
     const formattedTime = time.toLocaleTimeString()
 
     return (
@@ -64,46 +67,66 @@ export function MessageBuddle({ message, isCurrentUser, setQuoteMessage }: Messa
                         >
                             <ContextMenu>
                                 <ContextMenuTrigger>
-                                    <div
-                                        className={cn(
-                                            'rounded-2xl shadow-sm',
-                                            isCurrentUser
-                                                ? 'bg-primary text-background rounded-br-none px-4 py-2'
-                                                : 'bg-surface border border-border text-text-primary rounded-bl-none px-4 py-2',
-                                        )}
-                                    >
-                                        {message.quote && (
-                                            <div
-                                                className={cn(
-                                                    "text-xs p-2 mb-2 rounded border-l-4 overflow-hidden",
-                                                    isCurrentUser
-                                                        ? "bg-indigo-900/30 border-indigo-400 text-indigo-100"
-                                                        : "bg-slate-50 border-slate-400 text-slate-800",
-                                                )}
-                                            >
-                                                <p className="font-bold mb-0.5">
-                                                    @{message.quote.name}
-                                                </p>
-                                                <div className="prose prose-sm max-w-none prose-p:my-0 prose-headings:my-1 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-pre:my-1">
-                                                    {message.quote.content}
+                                    {!message.recalled ? (
+                                        <div
+                                            className={cn(
+                                                'rounded-2xl shadow-sm',
+                                                isCurrentUser
+                                                    ? 'bg-primary text-background rounded-br-none px-4 py-2'
+                                                    : 'bg-surface border border-border text-text-primary rounded-bl-none px-4 py-2',
+                                            )}
+                                        >
+                                            {message.quote && (
+                                                <div
+                                                    className={cn(
+                                                        "text-xs p-2 mb-2 rounded border-l-4 overflow-hidden",
+                                                        isCurrentUser
+                                                            ? "bg-indigo-900/30 border-indigo-400 text-indigo-100"
+                                                            : "bg-slate-50 border-slate-400 text-slate-800",
+                                                    )}
+                                                >
+                                                    <p className="font-bold mb-0.5">
+                                                        @{message.quote.name}
+                                                    </p>
+                                                    <div className="prose prose-sm max-w-none prose-p:my-0 prose-headings:my-1 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-pre:my-1">
+                                                        {message.quote.content}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                        <p className="text-sm wrap-break-word whitespace-pre-wrap">
-                                            {msg}
-                                        </p>
-                                    </div>
+                                            )}
+                                            <p className="text-sm wrap-break-word whitespace-pre-wrap">
+                                                {msg}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <span className="px-3 text-gray-500 text-sm whitespace-nowrap">
+                                            撤回了一条消息
+                                        </span>
+                                    )}
                                 </ContextMenuTrigger>
-                                <ContextMenuContent side="bottom">
+                                <ContextMenuContent 
+                                    side="bottom"
+                                    style={{
+                                        display: message.recalled ? 'none' : 'block'
+                                    }}
+                                >
                                     <ContextMenuGroup>
-                                        <ContextMenuItem onClick={() => setQuoteMessage?.({
-                                            name: user,
-                                            content: msg,
-                                            time: time.getTime(),
-                                        })}>
-                                            <QuoteIcon />
-                                            引用
-                                        </ContextMenuItem>
+                                        {!recalled && (
+                                            <ContextMenuItem onClick={() => setQuoteMessage?.({
+                                                id,
+                                                name: user,
+                                                content: msg,
+                                                time: time.getTime(),
+                                            })}>
+                                                <QuoteIcon />
+                                                引用
+                                            </ContextMenuItem>
+                                        )}
+                                        {isCurrentUser && !recalled && (
+                                            <ContextMenuItem onClick={() => recallMessage?.(id)}>
+                                                <UndoIcon />
+                                                撤回
+                                            </ContextMenuItem>
+                                        )}
                                     </ContextMenuGroup>
                                 </ContextMenuContent>
                             </ContextMenu>
