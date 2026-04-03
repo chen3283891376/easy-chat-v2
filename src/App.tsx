@@ -109,6 +109,21 @@ function App() {
                             attachments: content.attachments,
                         },
                     ]);
+
+                    const premission = await Notification.requestPermission();
+                    if (premission === 'granted') {
+                        const notification = new Notification(
+                            `来自 ${data.msg.name} 的消息`,
+                            {
+                                body: decryptedContent,
+                                icon: '/favicon.ico',
+                            },
+                        );
+                        notification.onclick = () => {
+                            window.focus();
+                            notification.close();
+                        };
+                    }
                 } catch (err) {
                     // 说明不是这个房间的消息或解密失败，忽略
                     // console.error('ws message handle error', err)
