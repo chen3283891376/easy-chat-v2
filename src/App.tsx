@@ -25,11 +25,13 @@ import {
 } from './components/ui/dialog';
 import UploadFile from './components/UploadFile';
 import { Progress } from './components/ui/progress';
+import { toast } from 'sonner';
 
 function App() {
     const wsRef = React.useRef<WebSocket | null>(null);
     const saveTimerRef = React.useRef<number | null>(null);
     const [messages, setMessages] = React.useState<IMessage[]>([]);
+    const messagesRef = React.useRef<IMessage[]>([]);
     const [sendMessage, setSendMessage] = React.useState('');
     const [quoteMessage, setQuoteMessage] = React.useState<IMessage | null>(
         null,
@@ -51,6 +53,26 @@ function App() {
     if (!currentUsername) {
         return SignUpPage();
     }
+
+    const handleSave = async () => {
+        console.log(messagesRef.current);
+        const saveRes = await fetch(`/api/room/${currentRoom}/save`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                messages: JSON.stringify(messagesRef.current),
+            }),
+        });
+        if (!saveRes.ok) {
+            console.error('Failed to save messages', await saveRes.text());
+        }
+    };
+
+    React.useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
 
     const recallMessage = async (messageId: string) => {
         setMessages((prev) =>
@@ -74,8 +96,39 @@ function App() {
     React.useEffect(() => {
         const ws = new WebSocket('wss://ws.asilu.com:8090/');
         wsRef.current = ws;
-        ws.onopen = () => {
+        ws.onopen = async () => {
             ws.send(JSON.stringify({ name: currentUsername }));
+
+            const response = await fetch(`/api/room/${currentRoom}`);
+            if (!response.ok) {
+                const createRes = await fetch(`/api/room`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        room_id: currentRoom,
+                        name: `Room ${currentRoom}`,
+                    }),
+                });
+                if (!createRes.ok) {
+                    console.error(
+                        'Failed to create room',
+                        await createRes.text(),
+                    );
+                    return;
+                }
+                toast.success('房间不存在，已自动创建，请刷新页面');
+                return;
+            }
+            const data: { name: string; messages: string } =
+                await response.json();
+            try {
+                const messages = JSON.parse(data.messages) as IMessage[];
+                setMessages(messages);
+            } catch {
+                toast.error('消息加载失败，可能是因为房间不存在或数据异常');
+            }
         };
         ws.onmessage = async (event) => {
             const data: WSMsgData = JSON.parse(event.data);
@@ -110,19 +163,21 @@ function App() {
                         },
                     ]);
 
-                    const premission = await Notification.requestPermission();
-                    if (premission === 'granted') {
-                        const notification = new Notification(
-                            `来自 ${data.msg.name} 的消息`,
-                            {
-                                body: decryptedContent,
-                                icon: '/favicon.ico',
-                            },
-                        );
-                        notification.onclick = () => {
-                            window.focus();
-                            notification.close();
-                        };
+                    if (data.msg.name !== currentUsername) {
+                        const premission = await Notification.requestPermission();
+                        if (premission === 'granted') {
+                            const notification = new Notification(
+                                `来自 ${data.msg.name} 的消息`,
+                                {
+                                    body: decryptedContent,
+                                    icon: '/favicon.ico',
+                                },
+                            );
+                            notification.onclick = () => {
+                                window.focus();
+                                notification.close();
+                            };
+                        }
                     }
                 } catch (err) {
                     // 说明不是这个房间的消息或解密失败，忽略
@@ -130,6 +185,9 @@ function App() {
                 }
             }
         };
+
+        saveTimerRef.current = setInterval(handleSave, 10000);
+        window.addEventListener('beforeunload', handleSave);
 
         return () => {
             ws.close();
