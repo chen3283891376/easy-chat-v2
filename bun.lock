@@ -11,6 +11,7 @@
         "clsx": "^2.1.1",
         "crypto-js": "^4.2.0",
         "hash-wasm": "^4.12.0",
+        "itty-sockets": "^0.9.3",
         "lucide-react": "^1.7.0",
         "next-themes": "^0.4.6",
         "radix-ui": "^1.4.3",
@@ -742,6 +743,8 @@
     "is-wsl": ["is-wsl@3.1.1", "", { "dependencies": { "is-inside-container": "^1.0.0" } }, "sha512-e6rvdUCiQCAuumZslxRJWR/Doq4VpPR82kqclvcS0efgt430SlGIk05vdCN58+VrzgtIcfNODjozVielycD4Sw=="],
 
     "isexe": ["isexe@2.0.0", "", {}, "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="],
+
+    "itty-sockets": ["itty-sockets@0.9.3", "", {}, "sha512-M5mYhpD8ef6LeVP/x/hE+UvJjQddIfPtG9psUnU7zFb/ZkS6Gi/wPzqUdiV7UNOWtKE4sBCeDqshBtzgKwsRnA=="],
 
     "jiti": ["jiti@2.6.1", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ=="],
 
