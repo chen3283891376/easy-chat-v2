@@ -39,7 +39,6 @@ function App() {
     const [username, setUsername] = useState<string | null>(null);
     const [roomName, setRoomName] = useState('default');
 
-    // 👇 从 localStorage 加载 roomList（唯一改动点）
     const [roomList, setRoomList] = useState<string[]>(() => {
         try {
             const saved = localStorage.getItem('chat-room-list');
@@ -85,7 +84,6 @@ function App() {
         localStorage.setItem(localKey, JSON.stringify(messages));
     }, [messages, localKey]);
 
-    // 👇 持久化 roomList 到 localStorage（唯一改动点）
     useEffect(() => {
         localStorage.setItem('chat-room-list', JSON.stringify(roomList));
     }, [roomList]);
