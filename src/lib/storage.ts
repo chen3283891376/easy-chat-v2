@@ -12,9 +12,9 @@ export const storage = {
         const response = await fetch('/api/new', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ key, value })
+            body: JSON.stringify({ key, value }),
         });
         if (!response.ok) {
             throw new Error('Failed to create new variable');
@@ -24,12 +24,12 @@ export const storage = {
         const response = await fetch('/api/set', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ key, value })
-        })
+            body: JSON.stringify({ key, value }),
+        });
         if (!response.ok) {
             throw new Error('Failed to set value in storage');
         }
-    }
-}
+    },
+};

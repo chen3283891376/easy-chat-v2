@@ -9,16 +9,17 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, 'src'),
-        }
+        },
     },
     server: {
         proxy: {
             '/api': {
-                target: 'http://127.0.0.1:58060',
+                // target: 'http://127.0.0.1:58060',
+                target: 'http://chenify.pythonanywhere.com',
                 changeOrigin: true,
                 secure: false,
-                rewrite: (path) => path.replace(/^\/api/, ''),
-            }
-        }
-    }
+                rewrite: path => path.replace(/^\/api/, ''),
+            },
+        },
+    },
 });

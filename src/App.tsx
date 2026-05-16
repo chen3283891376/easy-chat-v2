@@ -7,6 +7,17 @@ import { Separator } from './components/ui/separator';
 import { toast } from 'sonner';
 import { MessageBubble } from './components/MessageBubble';
 import { storage } from './lib/storage';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from './components/ui/dialog';
+import { Input as DialogInput } from './components/ui/input';
+import { ScrollArea as DialogScrollArea } from './components/ui/scroll-area';
 
 interface ChatMessage {
     username: string;
@@ -26,12 +37,25 @@ function App() {
     const [input, setInput] = useState('');
     const [channel, setChannel] = useState<IttySocket | null>(null);
     const [username, setUsername] = useState<string | null>(null);
+    const [roomName, setRoomName] = useState('default');
+
+    // 👇 从 localStorage 加载 roomList（唯一改动点）
+    const [roomList, setRoomList] = useState<string[]>(() => {
+        try {
+            const saved = localStorage.getItem('chat-room-list');
+            return saved ? JSON.parse(saved) : ['default'];
+        } catch {
+            return ['default'];
+        }
+    });
+
+    const [newRoomName, setNewRoomName] = useState('');
+    const [joinRoomName, setJoinRoomName] = useState('');
 
     const messagesRef = useRef<ChatMessage[]>([]);
     const hasPrompted = useRef(false);
     const isSyncing = useRef(false);
 
-    const roomName = 'default';
     const storageKey = `easychatv2-channel-${roomName}`;
     const localKey = `messages-${roomName}`;
 
@@ -57,11 +81,34 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (!messages.length) return;
         messagesRef.current = messages;
-        if (JSON.parse(localStorage.getItem(localKey) || '[]').length >= messages.length) return;
         localStorage.setItem(localKey, JSON.stringify(messages));
-    }, [messages]);
+    }, [messages, localKey]);
+
+    // 👇 持久化 roomList 到 localStorage（唯一改动点）
+    useEffect(() => {
+        localStorage.setItem('chat-room-list', JSON.stringify(roomList));
+    }, [roomList]);
+
+    const switchRoom = async (newRoom: string) => {
+        if (newRoom === roomName) return;
+
+        if (!isSyncing.current) {
+            isSyncing.current = true;
+            try {
+                const data = JSON.stringify(messagesRef.current);
+                await storage.set(storageKey, data);
+                console.log('✅ 离开房间已同步云端:', roomName);
+            } catch (err) {
+                console.error('❌ 离开房间同步失败', err);
+            }
+            isSyncing.current = false;
+        }
+
+        setMessages([]);
+        messagesRef.current = [];
+        setRoomName(newRoom);
+    };
 
     useEffect(() => {
         if (!username) return;
@@ -71,35 +118,30 @@ function App() {
         channel.on('open', async () => {
             try {
                 const localData = localStorage.getItem(localKey);
-                const localMessages: ChatMessage[] = localData
-                ? JSON.parse(localData)
-                : [];
+                const localMessages: ChatMessage[] = localData ? JSON.parse(localData) : [];
 
                 let cloudMessages: ChatMessage[] = [];
                 try {
-                const cloudData = await storage.get(storageKey);
-                cloudMessages = cloudData ? JSON.parse(cloudData) : [];
+                    const cloudData = await storage.get(storageKey);
+                    cloudMessages = cloudData ? JSON.parse(cloudData) : [];
                 } catch {
-                await storage.new(storageKey, '[]');
+                    await storage.new(storageKey, '[]');
                 }
 
                 const all = [...localMessages, ...cloudMessages];
-
                 const uniqueMap = new Map<string, ChatMessage>();
                 for (const m of all) {
-                const key = `${m.time}||${m.username}||${m.msg}`;
-                uniqueMap.set(key, m);
+                    const key = `${m.time}||${m.username}||${m.msg}`;
+                    uniqueMap.set(key, m);
                 }
-
                 const merged = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
-
                 setMessages(merged);
             } catch (err) {
                 console.error('加载消息失败', err);
             }
         });
 
-        channel.on('message', (msg) => {
+        channel.on('message', msg => {
             try {
                 const data = JSON.parse(msg.message);
                 setMessages(prev => [...prev, data]);
@@ -113,27 +155,56 @@ function App() {
         return () => {
             channel.close();
         };
-    }, [username]);
+    }, [username, roomName, storageKey, localKey]);
 
     useEffect(() => {
         const syncBeforeUnload = async () => {
             if (isSyncing.current) return;
             isSyncing.current = true;
-
             try {
                 const data = JSON.stringify(messagesRef.current);
                 await storage.set(storageKey, data);
-                console.log('✅ 关闭时同步云端成功');
+                console.log('✅ 关闭页面同步云端成功');
             } catch (err) {
-                console.error('❌ 关闭同步失败', err);
+                console.error('❌ 关闭页面同步失败', err);
             }
+            isSyncing.current = false;
         };
 
         window.addEventListener('beforeunload', syncBeforeUnload);
         return () => {
             window.removeEventListener('beforeunload', syncBeforeUnload);
         };
-    }, []);
+    }, [storageKey]);
+
+    // 创建房间
+    const handleCreateRoom = () => {
+        if (!newRoomName.trim()) {
+            toast.info('房间名不能为空');
+            return;
+        }
+        if (roomList.includes(newRoomName)) {
+            toast.info('房间已存在');
+            return;
+        }
+        setRoomList(prev => [...prev, newRoomName]);
+        switchRoom(newRoomName);
+        setNewRoomName('');
+        toast.success('创建并加入房间：' + newRoomName);
+    };
+
+    const handleJoinRoom = () => {
+        if (!joinRoomName.trim()) {
+            toast.info('请输入房间名');
+            return;
+        }
+        if (!roomList.includes(joinRoomName)) {
+            setRoomList(prev => [...prev, joinRoomName]);
+        }
+        switchRoom(joinRoomName);
+        setJoinRoomName('');
+        toast.success('已加入房间：' + joinRoomName);
+    };
 
     const handleSend = () => {
         if (!input.trim()) {
@@ -159,12 +230,80 @@ function App() {
 
     return (
         <div className="flex h-screen overflow-hidden">
-            <div className="w-64 bg-slate-100 p-4 flex flex-col">
-                <h3 className="text-lg font-semibold mb-4">选择聊天室</h3>
-                <Separator className="my-2" />
-                <div className="mt-4 text-sm">
-                    当前用户：<span className="font-medium">{username}</span>
-                </div>
+            <div className="w-64 bg-slate-100 p-4 flex flex-col gap-3">
+                <h3 className="text-lg font-semibold">聊天室</h3>
+                <Separator />
+
+                <div className="text-sm text-green-700 font-medium">当前：{roomName}</div>
+
+                <DialogScrollArea className="h-87.5 pr-2">
+                    <div className="space-y-1">
+                        {roomList.map(room => (
+                            <Button
+                                key={room}
+                                variant={room === roomName ? 'default' : 'ghost'}
+                                className="w-full justify-start"
+                                onClick={() => switchRoom(room)}
+                            >
+                                #{room}
+                            </Button>
+                        ))}
+                    </div>
+                </DialogScrollArea>
+
+                <Separator />
+
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button size="sm">创建房间</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>创建新房间</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <DialogInput
+                                placeholder="输入房间名"
+                                value={newRoomName}
+                                onChange={e => setNewRoomName(e.target.value)}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button size="sm" onClick={handleCreateRoom}>
+                                    创建并加入
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button size="sm">加入房间</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>加入房间</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <DialogInput
+                                placeholder="输入房间名"
+                                value={joinRoomName}
+                                onChange={e => setJoinRoomName(e.target.value)}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button size="sm" onClick={handleJoinRoom}>
+                                    加入
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <div className="mt-auto text-xs text-slate-500">当前用户：{username}</div>
             </div>
 
             <div className="flex-1 flex flex-col">
@@ -184,12 +323,12 @@ function App() {
                 <div className="p-3 border-t flex gap-2 items-center bg-white">
                     <Input
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={e => setInput(e.target.value)}
                         placeholder="请输入文本"
-                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
                         className="flex-1"
                     />
-                    <Button type='button' onClick={handleSend} disabled={!input}>
+                    <Button type="button" onClick={handleSend} disabled={!input}>
                         发送
                     </Button>
                 </div>
