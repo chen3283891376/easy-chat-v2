@@ -111,7 +111,7 @@ function App() {
     useEffect(() => {
         if (!username) return;
 
-        const channel = connect(`easy-chat-v2-${roomName}`, { as: username });
+        const channel = connect(`easy-chat-v2-${roomName}`, { as: username, announce: true });
 
         channel.on('open', async () => {
             try {
@@ -138,11 +138,25 @@ function App() {
                 console.error('加载消息失败', err);
             }
         });
+        channel.on('join', ({ alias }) => {
+            if (alias === username) return;
+            channel.send(
+                JSON.stringify({
+                    type: 'message',
+                    data: messagesRef.current,
+                    to: alias,
+                }),
+            );
+        });
 
         channel.on('message', msg => {
             try {
                 const data = JSON.parse(msg.message);
-                setMessages(prev => [...prev, data]);
+                if (data.type === 'message' && data.to === username) {
+                    setMessages(data.data);
+                } else {
+                    setMessages(prev => [...prev, data]);
+                }
             } catch (err) {
                 console.error('解析失败', err);
             }
