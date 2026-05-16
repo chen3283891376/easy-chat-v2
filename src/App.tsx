@@ -1,19 +1,12 @@
-import React from 'react';
-import { MessageBuddle } from './components/MessageBuddle';
-import { formatTime } from './lib/utils';
+import { useEffect, useRef, useState } from 'react';
+import { connect, type IttySocket } from 'itty-sockets';
 import { ScrollArea } from './components/ui/scroll-area';
-import SignUpPage from './SignUpPage';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
-import { decrypt, encrypt } from './lib/crypto';
-import { FileUpIcon, SendIcon, XIcon } from 'lucide-react';
-import type {
-    Attachment,
-    Message as IMessage,
-    WSMsgData,
-} from './types/message';
-import { FileDisplay } from './components/FileDisplay';
-import { useFileUpload } from './hooks/useFileUpload';
+import { Separator } from './components/ui/separator';
+import { toast } from 'sonner';
+import { MessageBubble } from './components/MessageBubble';
+import { storage } from './lib/storage';
 import {
     Dialog,
     DialogClose,
@@ -23,304 +16,332 @@ import {
     DialogTitle,
     DialogTrigger,
 } from './components/ui/dialog';
-import UploadFile from './components/UploadFile';
-import { Progress } from './components/ui/progress';
+import { Input as DialogInput } from './components/ui/input';
+import { ScrollArea as DialogScrollArea } from './components/ui/scroll-area';
+
+interface ChatMessage {
+    username: string;
+    msg: string;
+    time: number;
+}
+
+const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+};
 
 function App() {
-    const wsRef = React.useRef<WebSocket | null>(null);
-    const saveTimerRef = React.useRef<number | null>(null);
-    const [messages, setMessages] = React.useState<IMessage[]>([]);
-    const [sendMessage, setSendMessage] = React.useState('');
-    const [quoteMessage, setQuoteMessage] = React.useState<IMessage | null>(
-        null,
-    );
-    const [attachments, setAttachments] = React.useState<Attachment[]>([]);
-    const [isSending, setIsSending] = React.useState(false);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [input, setInput] = useState('');
+    const [channel, setChannel] = useState<IttySocket | null>(null);
+    const [username, setUsername] = useState<string | null>(null);
+    const [roomName, setRoomName] = useState('default');
 
-    const { upload, isUploading, uploadProgress } = useFileUpload();
-    const [open, setOpen] = React.useState(false);
-    const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-
-    const genMessageId = () =>
-        `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-
-    const currentUsername = localStorage.getItem('username');
-    const currentRoom =
-        new URLSearchParams(window.location.search).get('room') || 123456789;
-
-    if (!currentUsername) {
-        return SignUpPage();
-    }
-
-    const recallMessage = async (messageId: string) => {
-        setMessages((prev) =>
-            prev.map((msg) =>
-                msg.id === messageId ? { ...msg, recalled: true } : msg,
-            ),
-        );
-
+    const [roomList, setRoomList] = useState<string[]>(() => {
         try {
-            const recallPayload = { recall: true, id: messageId };
-            const encrypted = await encrypt(
-                JSON.stringify(recallPayload),
-                currentRoom,
-            );
-            !wsRef.current?.CONNECTING &&
-                wsRef.current?.send(JSON.stringify({ msg: encrypted }));
-        } catch (e) {
-            console.error('recall send failed', e);
+            const saved = localStorage.getItem('chat-room-list');
+            return saved ? JSON.parse(saved) : ['default'];
+        } catch {
+            return ['default'];
         }
-    };
-    React.useEffect(() => {
-        const ws = new WebSocket('wss://ws.asilu.com:8090/');
-        wsRef.current = ws;
-        ws.onopen = () => {
-            ws.send(JSON.stringify({ name: currentUsername }));
-        };
-        ws.onmessage = async (event) => {
-            const data: WSMsgData = JSON.parse(event.data);
-            if (data.msg) {
-                try {
-                    const parsed = JSON.parse(
-                        await decrypt(data.msg.content, currentRoom),
-                    );
+    });
 
-                    if (parsed && parsed.recall && parsed.id) {
-                        setMessages((prev) =>
-                            prev.map((m) =>
-                                m.id === parsed.id
-                                    ? { ...m, recalled: true }
-                                    : m,
-                            ),
-                        );
-                        return;
-                    }
+    const [newRoomName, setNewRoomName] = useState('');
+    const [joinRoomName, setJoinRoomName] = useState('');
 
-                    const content: IMessage = parsed;
-                    const decryptedContent = content.content;
-                    setMessages((prev) => [
-                        ...prev,
-                        {
-                            id: content.id || genMessageId(),
-                            name: data.msg.name,
-                            content: decryptedContent,
-                            time: data.msg.time,
-                            quote: content.quote,
-                            attachments: content.attachments,
-                        },
-                    ]);
+    const messagesRef = useRef<ChatMessage[]>([]);
+    const hasPrompted = useRef(false);
+    const isSyncing = useRef(false);
 
-                    const premission = await Notification.requestPermission();
-                    if (premission === 'granted') {
-                        const notification = new Notification(
-                            `来自 ${data.msg.name} 的消息`,
-                            {
-                                body: decryptedContent,
-                                icon: '/favicon.ico',
-                            },
-                        );
-                        notification.onclick = () => {
-                            window.focus();
-                            notification.close();
-                        };
-                    }
-                } catch (err) {
-                    // 说明不是这个房间的消息或解密失败，忽略
-                    // console.error('ws message handle error', err)
-                }
+    const storageKey = `easychatv2-channel-${roomName}`;
+    const localKey = `messages-${roomName}`;
+
+    useEffect(() => {
+        if (hasPrompted.current) return;
+        hasPrompted.current = true;
+
+        const savedName = localStorage.getItem('chat-username');
+        if (savedName) {
+            setUsername(savedName);
+            return;
+        }
+
+        const name = prompt('请输入用户名')?.trim();
+        if (name) {
+            localStorage.setItem('chat-username', name);
+            setUsername(name);
+        } else {
+            const defaultName = `用户${Math.floor(Math.random() * 10000)}`;
+            localStorage.setItem('chat-username', defaultName);
+            setUsername(defaultName);
+        }
+    }, []);
+
+    useEffect(() => {
+        messagesRef.current = messages;
+        localStorage.setItem(localKey, JSON.stringify(messages));
+    }, [messages, localKey]);
+
+    useEffect(() => {
+        localStorage.setItem('chat-room-list', JSON.stringify(roomList));
+    }, [roomList]);
+
+    const switchRoom = async (newRoom: string) => {
+        if (newRoom === roomName) return;
+
+        if (!isSyncing.current) {
+            isSyncing.current = true;
+            try {
+                const data = JSON.stringify(messagesRef.current);
+                await storage.set(storageKey, data);
+                console.log('✅ 离开房间已同步云端:', roomName);
+            } catch (err) {
+                console.error('❌ 离开房间同步失败', err);
             }
-        };
+            isSyncing.current = false;
+        }
+
+        setMessages([]);
+        messagesRef.current = [];
+        setRoomName(newRoom);
+    };
+
+    useEffect(() => {
+        if (!username) return;
+
+        const channel = connect(`easy-chat-v2-${roomName}`, { as: username, announce: true });
+
+        channel.on('open', async () => {
+            try {
+                const localData = localStorage.getItem(localKey);
+                const localMessages: ChatMessage[] = localData ? JSON.parse(localData) : [];
+
+                let cloudMessages: ChatMessage[] = [];
+                try {
+                    const cloudData = await storage.get(storageKey);
+                    cloudMessages = cloudData ? JSON.parse(cloudData) : [];
+                } catch {
+                    await storage.new(storageKey, '[]');
+                }
+
+                const all = [...localMessages, ...cloudMessages];
+                const uniqueMap = new Map<string, ChatMessage>();
+                for (const m of all) {
+                    const key = `${m.time}||${m.username}||${m.msg}`;
+                    uniqueMap.set(key, m);
+                }
+                const merged = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
+                setMessages(merged);
+            } catch (err) {
+                console.error('加载消息失败', err);
+            }
+        });
+        channel.on('join', ({ alias }) => {
+            if (alias === username) return;
+            channel.send(
+                JSON.stringify({
+                    type: 'message',
+                    data: messagesRef.current,
+                    to: alias,
+                }),
+            );
+        });
+
+        channel.on('message', msg => {
+            try {
+                const data = JSON.parse(msg.message);
+                if (data.type === 'message' && data.to === username) {
+                    setMessages(data.data);
+                } else {
+                    setMessages(prev => [...prev, data]);
+                }
+            } catch (err) {
+                console.error('解析失败', err);
+            }
+        });
+
+        setChannel(channel);
 
         return () => {
-            ws.close();
-            if (saveTimerRef.current) {
-                clearInterval(saveTimerRef.current);
-            }
+            channel.close();
         };
-    }, [currentRoom, currentUsername]);
+    }, [username, roomName, storageKey, localKey]);
 
-    const handleSend = async () => {
-        if (
-            (sendMessage.trim() !== '' || attachments.length !== 0) &&
-            !isSending
-        ) {
-            setIsSending(true);
+    useEffect(() => {
+        const syncBeforeUnload = async () => {
+            if (isSyncing.current) return;
+            isSyncing.current = true;
             try {
-                const messagePayload = {
-                    id: genMessageId(),
-                    content: sendMessage,
-                    quote: quoteMessage,
-                    attachments,
-                };
-
-                const encrypted = await encrypt(
-                    JSON.stringify(messagePayload),
-                    currentRoom,
-                );
-                !wsRef.current?.CONNECTING &&
-                    wsRef.current?.send(
-                        JSON.stringify({
-                            msg: encrypted,
-                        }),
-                    );
-                setSendMessage('');
-                setQuoteMessage(null);
-                setAttachments([]);
-            } finally {
-                setIsSending(false);
+                const data = JSON.stringify(messagesRef.current);
+                await storage.set(storageKey, data);
+                console.log('✅ 关闭页面同步云端成功');
+            } catch (err) {
+                console.error('❌ 关闭页面同步失败', err);
             }
+            isSyncing.current = false;
+        };
+
+        window.addEventListener('beforeunload', syncBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', syncBeforeUnload);
+        };
+    }, [storageKey]);
+
+    // 创建房间
+    const handleCreateRoom = () => {
+        if (!newRoomName.trim()) {
+            toast.info('房间名不能为空');
+            return;
         }
+        if (roomList.includes(newRoomName)) {
+            toast.info('房间已存在');
+            return;
+        }
+        setRoomList(prev => [...prev, newRoomName]);
+        switchRoom(newRoomName);
+        setNewRoomName('');
+        toast.success('创建并加入房间：' + newRoomName);
     };
 
-    const handleOpenChange = (isOpen: boolean) => {
-        setOpen(isOpen);
-        if (!isOpen) setSelectedFile(null);
-    };
-    const handleUpload = async () => {
-        if (selectedFile === null) return;
-
-        try {
-            const data = await upload(selectedFile);
-            setAttachments((prev) => [...prev, data]);
-
-            setOpen(false);
-        } catch {
-            // 忽略
-        } finally {
-            setSelectedFile(null);
-            setOpen(false);
+    const handleJoinRoom = () => {
+        if (!joinRoomName.trim()) {
+            toast.info('请输入房间名');
+            return;
         }
+        if (!roomList.includes(joinRoomName)) {
+            setRoomList(prev => [...prev, joinRoomName]);
+        }
+        switchRoom(joinRoomName);
+        setJoinRoomName('');
+        toast.success('已加入房间：' + joinRoomName);
+    };
+
+    const handleSend = () => {
+        if (!input.trim()) {
+            toast.info('不能发送空消息');
+            return;
+        }
+        if (!channel) {
+            toast.error('未连接');
+            return;
+        }
+
+        const payload = JSON.stringify({
+            username,
+            msg: input.trim(),
+            time: Date.now() / 1000,
+        });
+
+        channel.send(payload);
+        setMessages(prev => [...prev, JSON.parse(payload)]);
+        setInput('');
+        toast.success('发送成功');
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full">
-            <ScrollArea className="flex-1 min-h-0 p-4">
-                {messages.map((msg) => (
-                    <MessageBuddle
-                        key={msg.id}
-                        message={{
-                            id: msg.id,
-                            user: msg.name,
-                            msg: msg.recalled ? '消息已撤回' : msg.content,
-                            time: formatTime(msg.time),
-                            quote: msg.quote,
-                            recalled: msg.recalled,
-                            attachments: msg.attachments,
-                        }}
-                        isCurrentUser={msg.name === currentUsername}
-                        setQuoteMessage={setQuoteMessage}
-                        recallMessage={recallMessage}
-                    />
-                ))}
-            </ScrollArea>
-            <div className="p-3 flex flex-col bg-white border-t shrink-0 max-h-45 overflow-y-auto">
-                <div className="flex items-center mb-2 gap-2">
-                    {attachments.map((file, idx) => (
-                        <FileDisplay
-                            key={file.link || file.name || idx}
-                            fileData={file}
-                            compact
-                            deleteable
-                            onDelete={(file) => {
-                                setAttachments((prev) =>
-                                    prev.filter((f) => f !== file),
-                                );
-                            }}
-                        />
-                    ))}
-                </div>
-                {quoteMessage && (
-                    <div className="relative text-xs p-2 mb-2 rounded border-l-4 bg-slate-50 border-slate-400 text-slate-800">
-                        <p className="font-bold mb-0.5">@{quoteMessage.name}</p>
-                        <div className="prose prose-sm max-w-none max-h-24 overflow-y-auto prose-p:my-0 prose-headings:my-1 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-pre:my-1">
-                            {quoteMessage.content}
-                        </div>
-                        <Button
-                            size="icon-xs"
-                            className="absolute top-1 right-1"
-                            onClick={() => {
-                                setQuoteMessage(null);
-                            }}
-                        >
-                            <XIcon />
-                        </Button>
-                    </div>
-                )}
+        <div className="flex h-screen overflow-hidden">
+            <div className="w-64 bg-slate-100 p-4 flex flex-col gap-3">
+                <h3 className="text-lg font-semibold">聊天室</h3>
+                <Separator />
 
-                <div className="flex gap-2 items-center shrink-0">
-                    <Dialog open={open} onOpenChange={handleOpenChange}>
-                        <DialogTrigger asChild>
+                <div className="text-sm text-green-700 font-medium">当前：{roomName}</div>
+
+                <DialogScrollArea className="h-87.5 pr-2">
+                    <div className="space-y-1">
+                        {roomList.map(room => (
                             <Button
-                                size="icon-sm"
-                                disabled={isSending || isUploading}
+                                key={room}
+                                variant={room === roomName ? 'default' : 'ghost'}
+                                className="w-full justify-start"
+                                onClick={() => switchRoom(room)}
                             >
-                                <FileUpIcon />
+                                #{room}
                             </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>分享文件</DialogTitle>
-                            </DialogHeader>
-                            <UploadFile
-                                setSelectedFile={setSelectedFile}
-                                disabled={isUploading}
+                        ))}
+                    </div>
+                </DialogScrollArea>
+
+                <Separator />
+
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button size="sm">创建房间</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>创建新房间</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <DialogInput
+                                placeholder="输入房间名"
+                                value={newRoomName}
+                                onChange={e => setNewRoomName(e.target.value)}
                             />
-                            {isUploading && (
-                                <div className="flex items-center gap-2 mt-2">
-                                    <Progress
-                                        value={uploadProgress}
-                                        className="flex-1 h-2"
-                                    />
-                                    <span className="text-sm font-medium">
-                                        {uploadProgress}%
-                                    </span>
-                                </div>
-                            )}
-                            <DialogFooter className="mt-4">
-                                <DialogClose asChild>
-                                    <Button
-                                        variant="secondary"
-                                        className="cursor-pointer"
-                                        disabled={isUploading}
-                                    >
-                                        取消
-                                    </Button>
-                                </DialogClose>
-                                <Button
-                                    disabled={
-                                        selectedFile === null || isUploading
-                                    }
-                                    onClick={handleUpload}
-                                    className="cursor-pointer"
-                                >
-                                    {isUploading ? '上传中' : '分享'}
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button size="sm" onClick={handleCreateRoom}>
+                                    创建并加入
                                 </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button size="sm">加入房间</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>加入房间</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <DialogInput
+                                placeholder="输入房间名"
+                                value={joinRoomName}
+                                onChange={e => setJoinRoomName(e.target.value)}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button size="sm" onClick={handleJoinRoom}>
+                                    加入
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <div className="mt-auto text-xs text-slate-500">当前用户：{username}</div>
+            </div>
+
+            <div className="flex-1 flex flex-col">
+                <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-4">
+                        {messages.map((item, idx) => (
+                            <MessageBubble
+                                key={idx}
+                                message={item}
+                                currentUsername={username || ''}
+                                formatTime={formatTime}
+                            />
+                        ))}
+                    </div>
+                </ScrollArea>
+
+                <div className="p-3 border-t flex gap-2 items-center bg-white">
                     <Input
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
                         placeholder="请输入文本"
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
                         className="flex-1"
-                        value={sendMessage}
-                        onChange={(e) => setSendMessage(e.target.value)}
-                        onKeyDown={async (e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
-                            }
-                        }}
-                        disabled={isSending}
                     />
-                    <Button
-                        size={'icon-sm'}
-                        onClick={handleSend}
-                        disabled={
-                            isSending ||
-                            (sendMessage.trim().length === 0 &&
-                                attachments.length === 0)
-                        }
-                    >
-                        <SendIcon className="h-4 w-4" />
+                    <Button type="button" onClick={handleSend} disabled={!input}>
+                        发送
                     </Button>
                 </div>
             </div>

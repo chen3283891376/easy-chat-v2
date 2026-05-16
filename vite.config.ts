@@ -8,15 +8,17 @@ export default defineConfig({
     plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, './src'),
+            '@': path.resolve(__dirname, 'src'),
         },
     },
     server: {
         proxy: {
-            '/xes/api': {
-                target: 'https://code.xueersi.com/api',
+            '/api': {
+                // target: 'http://127.0.0.1:58060',
+                target: 'http://chenify.pythonanywhere.com',
                 changeOrigin: true,
-                rewrite: (url) => url.replace(/^\/xes\/api/, ''),
+                secure: false,
+                rewrite: path => path.replace(/^\/api/, ''),
             },
         },
     },
