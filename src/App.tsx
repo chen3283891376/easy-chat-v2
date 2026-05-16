@@ -134,6 +134,10 @@ function App() {
                 }
                 const merged = Array.from(uniqueMap.values()).sort((a, b) => a.time - b.time);
                 setMessages(merged);
+                if (merged.length !== cloudMessages.length) {
+                    await storage.set(storageKey, JSON.stringify(merged));
+                    channel.send(JSON.stringify({ type: 'message', data: merged, to: 'ALL[System!@##$^*$&$*%*]' }));
+                }
             } catch (err) {
                 console.error('加载消息失败', err);
             }
@@ -152,7 +156,7 @@ function App() {
         channel.on('message', msg => {
             try {
                 const data = JSON.parse(msg.message);
-                if (data.type === 'message' && data.to === username) {
+                if (data.type === 'message' && (data.to === username || data.to === 'ALL[System!@##$^*$&$*%*]')) {
                     setMessages(data.data);
                 } else {
                     setMessages(prev => [...prev, data]);
