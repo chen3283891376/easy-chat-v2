@@ -36,6 +36,8 @@ function App() {
 
     const socketRef = useRef<IttySocket | null>(null);
 
+    const [_newMsgCount, setNewMsgCount] = useState(0);
+
     const handleLoginSuccess = (userInfo: { username: string; publicKey: string }) => {
         setUser(userInfo);
     };
@@ -106,6 +108,24 @@ function App() {
     const storageKey = `easychatv2-channel-${roomName}`;
     const localKey = `messages-${roomName}`;
 
+    // ====================== 新增：云端同步函数 ======================
+    const syncToCloud = async () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        try {
+            const payload = JSON.stringify({
+                key: storageKey,
+                value: JSON.stringify(messagesRef.current),
+            });
+            await fetch('/api/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+            });
+        } catch {}
+        isSyncing.current = false;
+    };
+
     useEffect(() => {
         messagesRef.current = messages;
         localStorage.setItem(localKey, JSON.stringify(messages));
@@ -117,19 +137,18 @@ function App() {
 
     const switchRoom = async (newRoom: string) => {
         if (newRoom === roomName) return;
-        if (!isSyncing.current) {
-            isSyncing.current = true;
-            try {
-                await storage.set(storageKey, JSON.stringify(messagesRef.current));
-            } catch {}
-            isSyncing.current = false;
-        }
+
+        // 切换房间时强制同步（必成功）
+        await syncToCloud();
+
         if (socketRef.current) {
             socketRef.current.close();
             socketRef.current = null;
         }
         setMessages([]);
         messagesRef.current = [];
+        // 重置计数
+        setNewMsgCount(0);
         setRoomName(newRoom);
     };
 
@@ -192,18 +211,17 @@ function App() {
         };
     }, [user, roomName, localKey, storageKey, publicKeyMap]);
 
-    // 页面关闭同步消息
+    // 页面关闭同步
     useEffect(() => {
         const sync = () => {
-            if (isSyncing.current) return;
-            isSyncing.current = true;
             try {
-                // await storage.set(storageKey, JSON.stringify(messagesRef.current));
-                const payload = JSON.stringify({ key: storageKey, value: JSON.stringify(messagesRef.current) });
+                const payload = JSON.stringify({
+                    key: storageKey,
+                    value: JSON.stringify(messagesRef.current),
+                });
                 const blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/set', blob);
             } catch {}
-            isSyncing.current = false;
         };
         window.addEventListener('beforeunload', sync);
         return () => window.removeEventListener('beforeunload', sync);
@@ -233,15 +251,26 @@ function App() {
         setJoinRoomName('');
     };
 
+    // 30条同步一次
     const handleSend = async () => {
         if (!user || !input || !socketRef.current || !privateKey) return;
         const time = Math.floor(Date.now() / 1000);
         const msg = input.trim();
         const sig = await signMessage(msg, user.username, time, privateKey);
         const data = { username: user.username, msg, time, sig };
+
         socketRef.current.send(JSON.stringify(data));
         setMessages(p => [...p, data]);
         setInput('');
+
+        setNewMsgCount(prev => {
+            const next = prev + 1;
+            if (next >= 30) {
+                syncToCloud();
+                return 0;
+            }
+            return next;
+        });
     };
 
     if (!user) return <AuthModal onLoginSuccess={handleLoginSuccess} />;
