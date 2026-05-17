@@ -1,4 +1,5 @@
 import { AvatarGroupCount } from '@/components/ui/avatar';
+import { formatTime } from '@/lib/time.ts';
 
 export type Message = {
     username: string;
@@ -9,10 +10,9 @@ export type Message = {
 type MessageBubbleProps = {
     message: Message;
     currentUsername: string;
-    formatTime: (timestamp: number) => string;
 };
 
-export const MessageBubble = ({ message, currentUsername, formatTime }: MessageBubbleProps) => {
+export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) => {
     const isCurrentUser = message.username === currentUsername;
 
     return (
