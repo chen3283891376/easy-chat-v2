@@ -147,7 +147,9 @@ function App() {
                 try {
                     const data = await storage.get(storageKey);
                     cloud = JSON.parse(data || '[]');
-                } catch {}
+                } catch {
+                    await storage.new(storageKey, '[]');
+                }
                 const all = [...local, ...cloud];
                 const map = new Map<string, ChatMessage>();
                 all.forEach(m => map.set(`${m.time}|${m.username}|${m.msg}`, m));
@@ -192,11 +194,14 @@ function App() {
 
     // 页面关闭同步消息
     useEffect(() => {
-        const sync = async () => {
+        const sync = () => {
             if (isSyncing.current) return;
             isSyncing.current = true;
             try {
-                await storage.set(storageKey, JSON.stringify(messagesRef.current));
+                // await storage.set(storageKey, JSON.stringify(messagesRef.current));
+                const payload = JSON.stringify({ key: storageKey, value: JSON.stringify(messagesRef.current) });
+                const blob = new Blob([payload], { type: 'application/json' });
+                navigator.sendBeacon('/api/set', blob);
             } catch {}
             isSyncing.current = false;
         };

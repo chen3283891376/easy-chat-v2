@@ -91,7 +91,7 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                 const { publicKey, encryptedPrivate } = data.data;
 
                 // ✅ 测试解密（验证密码正确）
-                const testDecrypt = await decryptPrivateKey(encryptedPrivate, password);
+                const testDecrypt = decryptPrivateKey(encryptedPrivate, password);
                 if (!testDecrypt) {
                     toast.error('密码错误');
                     setLoading(false);

@@ -12,13 +12,15 @@ try:
 except:
     with open("var.pickle","wb") as f:
         variables = {}
+        pickle.dump({},f)
 
 try:
-    with open("public_keys.pickle","rb") as f:
+    with open("pubkeys.pickle","rb") as f:
         public_keys = pickle.load(f)
 except:
-    with open("public_keys.pickle","wb") as f:
+    with open("pubkeys.pickle","wb") as f:
         public_keys = {}
+        pickle.dump({},f)
 
 try:
     with open("user_info.pickle","rb") as f:
@@ -26,6 +28,7 @@ try:
 except:
     with open("user_info.pickle","wb") as f:
         user_data = {}
+        pickle.dump({},f)
 
 @app.route('/new', methods=['POST'])
 def new_variable():
@@ -53,6 +56,7 @@ def set_variable():
 
 @app.route('/get', methods=['GET'])
 def get_variable():
+    global variables
     key = request.args.get('key')
     if key in variables:
         return jsonify({"status": "success", "message": "操作成功", "data": variables[key]})
@@ -113,4 +117,4 @@ def get_public_key():
     return jsonify({"status": "success", "message": "操作成功", "data": "public_key_here"})
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=58060, debug=True)
+    app.run(host='127.0.0.1', port=58060, debug=False)
