@@ -1,20 +1,24 @@
-import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
-import { sha256 } from '@noble/hashes/sha2.js';
+import { argon2id } from '@noble/hashes/argon2.js';
 import { gcm } from '@noble/ciphers/aes.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 
 // ==============================
-// 安全方案：PBKDF2-HMAC-SHA256 + AES-GCM
+// 安全方案：Argon2id + AES‑GCM
 // ==============================
+
+// Argon2id 安全参数
+const ARGON2_OPT = {
+    t: 3,             // iterations
+    m: 65536,         // memory (KB) -> 64MB
+    p: 4,             // parallelism
+    dkLen: 32,        // 输出32字节 = AES‑256密钥
+};
 
 export function encryptPrivateKey(privateKey: string, password: string): string {
     const salt = randomBytes(16);
     const iv = randomBytes(12);
 
-    const key = pbkdf2(sha256, password, salt, {
-        c: 210000,
-        dkLen: 32,
-    });
+    const key = argon2id(password, salt, ARGON2_OPT);
 
     const data = new TextEncoder().encode(privateKey);
     const cipher = gcm(key, iv).encrypt(data);
@@ -31,10 +35,7 @@ export function decryptPrivateKey(encryptedStr: string, password: string): strin
         const iv = unhex(parts[1]);
         const cipher = unhex(parts[2]);
 
-        const key = pbkdf2(sha256, password, salt, {
-            c: 210000,
-            dkLen: 32,
-        });
+        const key = argon2id(password, salt, ARGON2_OPT);
 
         const plain = gcm(key, iv).decrypt(cipher);
         return new TextDecoder().decode(plain);
