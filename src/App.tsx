@@ -77,7 +77,7 @@ function App() {
 
     useEffect(() => {
         if (!user) return;
-        fetch('/user/public-keys')
+        fetch('/api/user/public-keys')
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') setPublicKeyMap(data.data);
