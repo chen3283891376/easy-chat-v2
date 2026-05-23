@@ -33,58 +33,7 @@ function App() {
     const [user, setUser] = useState<{ username: string; publicKey: string } | null>(null);
     const [privateKey, setPrivateKey] = useState('');
     const [publicKeyMap, setPublicKeyMap] = useState<Record<string, string>>({});
-
     const socketRef = useRef<IttySocket | null>(null);
-
-    const [_newMsgCount, setNewMsgCount] = useState(0);
-
-    const handleLoginSuccess = (userInfo: { username: string; publicKey: string }) => {
-        setUser(userInfo);
-    };
-
-    useEffect(() => {
-        if (!user) return;
-
-        const unlock = async () => {
-            const encryptedPrivate = localStorage.getItem('chat-encrypted-private');
-            if (!encryptedPrivate) return;
-
-            const unlockedUser = localStorage.getItem('chat-key-unlocked');
-            const savedPwd = localStorage.getItem('chat-unlock-pwd');
-
-            if (unlockedUser === user.username && savedPwd) {
-                const decrypted = await decryptPrivateKey(encryptedPrivate, savedPwd);
-                if (decrypted) {
-                    setPrivateKey(decrypted);
-                    return;
-                }
-                localStorage.removeItem('chat-key-unlocked');
-                localStorage.removeItem('chat-unlock-pwd');
-            }
-
-            const pwd = prompt('请输入密码解锁私钥：') || '';
-            const decrypted = await decryptPrivateKey(encryptedPrivate, pwd);
-            if (decrypted) {
-                setPrivateKey(decrypted);
-                localStorage.setItem('chat-key-unlocked', user.username);
-                localStorage.setItem('chat-unlock-pwd', pwd);
-                toast.success('私钥已解锁');
-            } else {
-                toast.error('密码错误');
-            }
-        };
-
-        unlock();
-    }, [user]);
-
-    useEffect(() => {
-        if (!user) return;
-        fetch('/api/user/public-keys')
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') setPublicKeyMap(data.data);
-            });
-    }, [user]);
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
@@ -107,21 +56,31 @@ function App() {
 
     const storageKey = `easychatv2-channel-${roomName}`;
     const localKey = `messages-${roomName}`;
+    const lastSyncKey = `last-sync-${roomName}`;
 
-    // ====================== 新增：云端同步函数 ======================
+    const getLastSync = () => Number(localStorage.getItem(lastSyncKey) || 0);
+    const setLastSync = (t: number) => localStorage.setItem(lastSyncKey, String(t));
+
     const syncToCloud = async () => {
         if (isSyncing.current) return;
         isSyncing.current = true;
         try {
-            const payload = JSON.stringify({
-                key: storageKey,
-                value: JSON.stringify(messagesRef.current),
-            });
-            await fetch('/api/set', {
+            const last = getLastSync();
+            const newMsgs = messagesRef.current.filter(m => m.time > last);
+            if (newMsgs.length === 0) return;
+
+            await fetch('/api/append', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: payload,
+                body: JSON.stringify({
+                    key: storageKey,
+                    value: JSON.stringify(newMsgs),
+                }),
             });
+
+            // ✅ 同步成功，更新最后同步时间
+            const maxTime = Math.max(...newMsgs.map(m => m.time));
+            setLastSync(maxTime);
         } catch {}
         isSyncing.current = false;
     };
@@ -137,8 +96,6 @@ function App() {
 
     const switchRoom = async (newRoom: string) => {
         if (newRoom === roomName) return;
-
-        // 切换房间时强制同步（必成功）
         await syncToCloud();
 
         if (socketRef.current) {
@@ -147,8 +104,6 @@ function App() {
         }
         setMessages([]);
         messagesRef.current = [];
-        // 重置计数
-        setNewMsgCount(0);
         setRoomName(newRoom);
     };
 
@@ -166,23 +121,40 @@ function App() {
                 try {
                     const data = await storage.get(storageKey);
                     cloud = JSON.parse(data || '[]');
-                } catch {
+                } catch (err) {
+                    console.warn(err);
                     await storage.new(storageKey, '[]');
                 }
+
                 const all = [...local, ...cloud];
                 const map = new Map<string, ChatMessage>();
                 all.forEach(m => map.set(`${m.time}|${m.username}|${m.msg}`, m));
-                setMessages(Array.from(map.values()).sort((a, b) => a.time - b.time));
+                const sorted = Array.from(map.values()).sort((a, b) => a.time - b.time);
+
+                setMessages(sorted);
+
+                if (sorted.length > 0) {
+                    const maxTime = Math.max(...sorted.map(m => m.time));
+                    setLastSync(maxTime);
+                }
             } catch {}
         });
 
-        channel.on('join', ({ alias }) => {
+        channel.on('join', async ({ alias }) => {
             if (alias === user.username) return;
+            const sig = await signMessage(
+                JSON.stringify(messagesRef.current),
+                user.username,
+                Math.floor(Date.now() / 1000),
+                privateKey,
+            );
             channel.send(
                 JSON.stringify({
                     type: 'message',
+                    time: Math.floor(Date.now() / 1000),
                     data: messagesRef.current,
                     to: alias,
+                    sig,
                 }),
             );
         });
@@ -190,19 +162,32 @@ function App() {
         channel.on('message', async msg => {
             try {
                 const data = JSON.parse(msg.message);
-                if (data.type === 'message') {
+                if (data.type === 'message' && data.to === user.username) {
+                    if (!data.sig) return;
+                    const pub = publicKeyMap[msg.alias];
+                    if (!pub) return;
+                    const ok = await verifyMessage(JSON.stringify(data.data), msg.alias, data.time, data.sig, pub);
+                    if (!ok) return;
                     setMessages(data.data);
                     return;
                 }
+
                 const { username: sendUser, msg: content, time, sig } = data;
+                console.log(data);
                 if (!sig) return;
                 const pub = publicKeyMap[sendUser];
+                console.log(pub);
                 if (!pub) return;
                 const now = Math.floor(Date.now() / 1000);
                 if (Math.abs(now - time) > 30) return;
                 const ok = await verifyMessage(content, sendUser, time, sig, pub);
                 if (!ok) return;
-                setMessages(prev => [...prev, data]);
+
+                setMessages(prev => {
+                    const exist = prev.some(m => m.time === time && m.username === sendUser && m.msg === content);
+                    if (exist) return prev;
+                    return [...prev, data];
+                });
             } catch {}
         });
 
@@ -211,18 +196,22 @@ function App() {
         };
     }, [user, roomName, localKey, storageKey, publicKeyMap]);
 
-    // 页面关闭同步
     useEffect(() => {
         const sync = () => {
             try {
+                const last = getLastSync();
+                const newMsgs = messagesRef.current.filter(m => m.time > last);
+                if (newMsgs.length === 0) return;
+
                 const payload = JSON.stringify({
                     key: storageKey,
-                    value: JSON.stringify(messagesRef.current),
+                    value: JSON.stringify(newMsgs),
                 });
                 const blob = new Blob([payload], { type: 'application/json' });
-                navigator.sendBeacon('/api/set', blob);
+                navigator.sendBeacon('/api/append', blob);
             } catch {}
         };
+
         window.addEventListener('beforeunload', sync);
         return () => window.removeEventListener('beforeunload', sync);
     }, [storageKey]);
@@ -251,7 +240,7 @@ function App() {
         setJoinRoomName('');
     };
 
-    // 30条同步一次
+    // 发送消息 + 每 30 条自动增量同步
     const handleSend = async () => {
         if (!user || !input || !socketRef.current || !privateKey) return;
         const time = Math.floor(Date.now() / 1000);
@@ -263,15 +252,57 @@ function App() {
         setMessages(p => [...p, data]);
         setInput('');
 
-        setNewMsgCount(prev => {
-            const next = prev + 1;
-            if (next >= 30) {
-                syncToCloud();
-                return 0;
-            }
-            return next;
-        });
+        const total = messagesRef.current.length;
+        if (total % 30 === 0) {
+            syncToCloud();
+        }
     };
+
+    const handleLoginSuccess = (userInfo: { username: string; publicKey: string }) => {
+        setUser(userInfo);
+    };
+
+    useEffect(() => {
+        if (!user) return;
+        const unlock = () => {
+            const encryptedPrivate = localStorage.getItem('chat-encrypted-private');
+            if (!encryptedPrivate) return;
+
+            const unlockedUser = localStorage.getItem('chat-key-unlocked');
+            const savedPwd = localStorage.getItem('chat-unlock-pwd');
+
+            if (unlockedUser === user.username && savedPwd) {
+                const decrypted = decryptPrivateKey(encryptedPrivate, savedPwd);
+                if (decrypted) {
+                    setPrivateKey(decrypted);
+                    return;
+                }
+                localStorage.removeItem('chat-key-unlocked');
+                localStorage.removeItem('chat-unlock-pwd');
+            }
+
+            const pwd = prompt('请输入密码解锁私钥：') || '';
+            const decrypted = decryptPrivateKey(encryptedPrivate, pwd);
+            if (decrypted) {
+                setPrivateKey(decrypted);
+                localStorage.setItem('chat-key-unlocked', user.username);
+                localStorage.setItem('chat-unlock-pwd', pwd);
+                toast.success('私钥已解锁');
+            } else {
+                toast.error('密码错误');
+            }
+        };
+        unlock();
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+        fetch('/api/user/public-keys')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') setPublicKeyMap(data.data);
+            });
+    }, [user]);
 
     if (!user) return <AuthModal onLoginSuccess={handleLoginSuccess} />;
 
@@ -339,7 +370,7 @@ function App() {
                 <div className="text-xs text-muted-foreground mt-auto">用户：{user.username}</div>
             </div>
             <div className="flex-1 flex flex-col">
-                <ScrollArea className="flex-1 p-4">
+                <ScrollArea className="flex-1 p-4 h-[calc(100vh-64px)]">
                     <div className="space-y-4">
                         {messages.map((m, i) => (
                             <MessageBubble key={i} message={m} currentUsername={user.username} />

@@ -32,4 +32,16 @@ export const storage = {
             throw new Error('Failed to set value in storage');
         }
     },
+    append: async (key: string, value: any) => {
+        const response = await fetch('/api/append', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ key, value }),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to append value in storage');
+        }
+    }
 };
