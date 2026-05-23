@@ -31,9 +31,10 @@ export async function signMessage(
     msg: string,
     username: string,
     time: number,
-    privateKeyHex: string
+    privateKeyHex: string,
+    nonce: string
 ) {
-    const data = new TextEncoder().encode(`${username}|${msg}|${time}`);
+    const data = new TextEncoder().encode(`${username}|${msg}|${time}|${nonce}`);
     const sig = await ed.signAsync(data, fromHex(privateKeyHex));
     return toHex(sig);
 }
@@ -44,10 +45,11 @@ export async function verifyMessage(
     username: string,
     time: number,
     sigHex: string,
-    publicKeyHex: string
+    publicKeyHex: string,
+    nonce: string
 ) {
     try {
-        const data = new TextEncoder().encode(`${username}|${msg}|${time}`);
+        const data = new TextEncoder().encode(`${username}|${msg}|${time}|${nonce}`);
         return await ed.verifyAsync(
             fromHex(sigHex),
             data,

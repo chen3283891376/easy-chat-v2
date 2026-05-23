@@ -20,6 +20,7 @@ import { Input as DialogInput } from './components/ui/input';
 import { ScrollArea as DialogScrollArea } from './components/ui/scroll-area';
 import { AuthModal } from './components/AuthModal';
 import { signMessage, verifyMessage } from './lib/ed25519';
+import { genNonce } from './lib/utils';
 
 interface ChatMessage {
     username: string;
@@ -146,11 +147,13 @@ function App() {
 
         channel.on('join', async ({ alias }) => {
             if (alias === user.username) return;
+            const nonce = genNonce();
             const sig = await signMessage(
                 JSON.stringify(messagesRef.current),
                 user.username,
                 Math.floor(Date.now() / 1000),
                 privateKey,
+                nonce,
             );
             channel.send(
                 JSON.stringify({
@@ -159,6 +162,7 @@ function App() {
                     data: messagesRef.current,
                     to: alias,
                     sig,
+                    nonce,
                 }),
             );
         });
@@ -170,7 +174,15 @@ function App() {
                     if (!data.sig) return;
                     const pub = publicKeyMap[msg.alias];
                     if (!pub) return;
-                    const ok = await verifyMessage(JSON.stringify(data.data), msg.alias, data.time, data.sig, pub);
+                    const nonce = data.nonce || '';
+                    const ok = await verifyMessage(
+                        JSON.stringify(data.data),
+                        msg.alias,
+                        data.time,
+                        data.sig,
+                        pub,
+                        nonce,
+                    );
                     if (!ok) return;
                     setMessages(data.data);
                     return;
@@ -191,9 +203,10 @@ function App() {
                     } catch {}
                 }
                 if (!pub) return;
+                const nonce = data.nonce || '';
                 const now = Math.floor(Date.now() / 1000);
                 if (Math.abs(now - time) > 10) return;
-                const ok = await verifyMessage(content, sendUser, time, sig, pub);
+                const ok = await verifyMessage(content, sendUser, time, sig, pub, nonce);
                 if (!ok) return;
 
                 setMessages(prev => {
@@ -225,13 +238,15 @@ function App() {
 
                 const time = Math.floor(Date.now() / 1000);
                 const msg = `${storageKey}|${JSON.stringify(newMsgs)}`;
-                const sig = await signMessage(msg, user.username, time, privateKey);
+                const nonce = genNonce();
+                const sig = await signMessage(msg, user.username, time, privateKey, nonce);
                 const payload = JSON.stringify({
                     key: storageKey,
                     value: JSON.stringify(newMsgs),
                     username: user.username,
                     time,
                     sig,
+                    nonce,
                 });
 
                 const blob = new Blob([payload], { type: 'application/json' });
@@ -315,8 +330,9 @@ function App() {
         if (!user || !input || !socketRef.current || !privateKey) return;
         const time = Math.floor(Date.now() / 1000);
         const msg = input.trim();
-        const sig = await signMessage(msg, user.username, time, privateKey);
-        const data = { username: user.username, msg, time, sig };
+        const nonce = genNonce();
+        const sig = await signMessage(msg, user.username, time, privateKey, nonce);
+        const data = { username: user.username, msg, time, sig, nonce };
 
         socketRef.current.send(JSON.stringify(data));
         setMessages(p => [...p, data]);

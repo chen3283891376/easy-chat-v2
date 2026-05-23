@@ -25,6 +25,11 @@ const db = new Low<DBData>(new JSONFile("db.json"), {
 });
 await db.read();
 
+const usedNonce = new Set<string>();
+setInterval(() => {
+    usedNonce.clear();
+}, 60 * 1000);
+
 const DEBUG = Bun.argv.includes("--debug");
 
 function debugLog(req: Request, status: number, startTime: bigint) {
@@ -58,15 +63,23 @@ Bun.serve({
     routes: {
         "/new": {
             POST: withDebugLog(async (req) => {
-                const { key, value, username, time, sig } = await req.json() as { key: string; value: any; username?: string; time?: number; sig?: string };
+                const { key, value, username, time, sig, nonce } = await req.json() as any;
+
+                if (!nonce || usedNonce.has(nonce)) {
+                    return Response.json({ status: "error", message: "请求重复或已过期" }, { status: 400 });
+                }
+
                 if (username && time && sig) {
                     const user = db.data.user_data[username];
                     if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                     const now = Math.floor(Date.now() / 1000);
                     if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
-                    const payload = `${username}|${key}|${JSON.stringify(value)}|${time}`;
+
+                    const payload = `${username}|${key}|${JSON.stringify(value)}|${time}|${nonce}`;
                     const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                     if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
+
+                    usedNonce.add(nonce);
                 } else {
                     return Response.json({ status: "error", message: "缺少签名认证" }, { status: 401 });
                 }
@@ -82,7 +95,12 @@ Bun.serve({
 
         "/set": {
             POST: withDebugLog(async (req) => {
-                const { key, value, username, time, sig } = await req.json() as { key: string; value: any; username?: string; time?: number; sig?: string };
+                const { key, value, username, time, sig, nonce } = await req.json() as any;
+
+                if (!nonce || usedNonce.has(nonce)) {
+                    return Response.json({ status: "error", message: "请求重复或已过期" }, { status: 400 });
+                }
+
                 if (!db.data.variables[key]) {
                     return Response.json({ status: "error", message: "云变量不存在", data: [] }, { status: 404 });
                 }
@@ -91,9 +109,12 @@ Bun.serve({
                 if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                 const now = Math.floor(Date.now() / 1000);
                 if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
-                const payload = `${username}|${key}|${JSON.stringify(value)}|${time}`;
+
+                const payload = `${username}|${key}|${JSON.stringify(value)}|${time}|${nonce}`;
                 const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                 if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
+
+                usedNonce.add(nonce);
 
                 db.data.variables[key] = value;
                 await db.write();
@@ -113,7 +134,12 @@ Bun.serve({
 
         "/append": {
             POST: withDebugLog(async (req) => {
-                const { key, value, username, time, sig } = await req.json() as { key: string; value: string; username?: string; time?: number; sig?: string };
+                const { key, value, username, time, sig, nonce } = await req.json() as any;
+
+                if (!nonce || usedNonce.has(nonce)) {
+                    return Response.json({ status: "error", message: "请求重复或已过期" }, { status: 400 });
+                }
+
                 if (!db.data.variables[key]) {
                     return Response.json({ status: "error", message: "云变量不存在", data: [] }, { status: 404 });
                 }
@@ -122,9 +148,12 @@ Bun.serve({
                 if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                 const now = Math.floor(Date.now() / 1000);
                 if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
-                const payload = `${username}|${key}|${value}|${time}`;
+
+                const payload = `${username}|${key}|${value}|${time}|${nonce}`;
                 const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                 if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
+
+                usedNonce.add(nonce);
 
                 try {
                     const current = JSON.parse(db.data.variables[key] || "[]");
