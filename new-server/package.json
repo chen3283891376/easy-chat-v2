@@ -1,0 +1,23 @@
+{
+    "name": "new-server",
+    "module": "index.ts",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "start": "bun index.ts",
+        "dev": "bun index.ts --debug",
+        "build": "bun build index.ts --outdir dist --minify --target bun"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "prettier": "^3.8.3"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@noble/ed25519": "^3.1.0",
+        "@noble/hashes": "^2.2.0",
+        "lowdb": "^7.0.1"
+    }
+}
