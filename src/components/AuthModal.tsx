@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { generateKeyPair } from '@/lib/ed25519';
 import { encryptPrivateKey, decryptPrivateKey } from '@/lib/aes';
 import { toast } from 'sonner';
@@ -6,9 +6,10 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from './ui/field';
 
 interface AuthModalProps {
-    onLoginSuccess: (user: { username: string; publicKey: string }) => void;
+    onLoginSuccess: (user: { username: string; publicKey: string }, privateKey: string) => void;
 }
 
 export function AuthModal({ onLoginSuccess }: AuthModalProps) {
@@ -16,31 +17,50 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
     const [password, setPassword] = useState('');
     const [isRegister, setIsRegister] = useState(false);
     const [loading, setLoading] = useState(false);
+    const isPwdValid = useRef(false);
 
     useEffect(() => {
         const localUser = localStorage.getItem('chat-user');
         const localPub = localStorage.getItem('chat-public-key');
-        if (localUser && localPub) {
-            onLoginSuccess({
-                username: localUser,
-                publicKey: localPub,
-            });
+        const encryptedPriv = localStorage.getItem('chat-encrypted-private');
+
+        if (localUser && localPub && encryptedPriv) {
+            const savedPwd = localStorage.getItem('chat-unlock-pwd');
+            if (savedPwd) {
+                try {
+                    const privateKey = decryptPrivateKey(encryptedPriv, savedPwd);
+                    if (privateKey) {
+                        onLoginSuccess({ username: localUser, publicKey: localPub }, privateKey);
+                    } else {
+                        localStorage.removeItem('chat-unlock-pwd');
+                        localStorage.removeItem('chat-key-unlocked');
+                    }
+                } catch (e) {
+                    localStorage.removeItem('chat-unlock-pwd');
+                }
+            }
         }
     }, [onLoginSuccess]);
 
-    // ====================== 注册（async）======================
+    useEffect(() => {
+        isPwdValid.current = password.length >= 8;
+    }, [password]);
+
+    // ====================== 注册 ======================
     const handleRegister = async () => {
         if (!username || !password) {
             toast.info('请输入用户名和密码');
+            return;
+        }
+        if (username.includes('|')) {
+            toast.error('用户名不能包含 | 字符');
             return;
         }
         setLoading(true);
 
         try {
             const { privateKey: privateHex, publicKey: publicHex } = await generateKeyPair();
-
-            // ✅ Argon2id + AES 加密
-            const encryptedPrivate = await encryptPrivateKey(privateHex, password);
+            const encryptedPrivate = encryptPrivateKey(privateHex, password);
 
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
@@ -58,8 +78,11 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                 localStorage.setItem('chat-public-key', publicHex);
                 localStorage.setItem('chat-encrypted-private', encryptedPrivate);
 
+                localStorage.setItem('chat-key-unlocked', username);
+                localStorage.setItem('chat-unlock-pwd', password);
+
                 toast.success('注册成功');
-                onLoginSuccess({ username, publicKey: publicHex });
+                onLoginSuccess({ username, publicKey: publicHex }, privateHex);
             } else {
                 toast.error(data.message);
             }
@@ -71,7 +94,7 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
         setLoading(false);
     };
 
-    // ====================== 登录（async）======================
+    // ====================== 登录 ======================
     const handleLogin = async () => {
         if (!username || !password) {
             toast.info('请输入用户名和密码');
@@ -90,9 +113,8 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
             if (data.status === 'success') {
                 const { publicKey, encryptedPrivate } = data.data;
 
-                // ✅ 测试解密（验证密码正确）
-                const testDecrypt = decryptPrivateKey(encryptedPrivate, password);
-                if (!testDecrypt) {
+                const privateKey = decryptPrivateKey(encryptedPrivate, password);
+                if (!privateKey) {
                     toast.error('密码错误');
                     setLoading(false);
                     return;
@@ -102,8 +124,11 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                 localStorage.setItem('chat-public-key', publicKey);
                 localStorage.setItem('chat-encrypted-private', encryptedPrivate);
 
+                localStorage.setItem('chat-key-unlocked', username);
+                localStorage.setItem('chat-unlock-pwd', password);
+
                 toast.success('登录成功');
-                onLoginSuccess({ username, publicKey });
+                onLoginSuccess({ username, publicKey }, privateKey);
             } else {
                 toast.error(data.message);
             }
@@ -135,14 +160,28 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                                 value={username}
                                 onChange={e => setUsername(e.target.value)}
                             />
-                            <Input
+                            {/* <Input
                                 name="password"
                                 type="password"
                                 placeholder="密码"
                                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
-                            />
+                            /> */}
+                            <Field data-invalid={isPwdValid.current}>
+                                <FieldLabel>密码</FieldLabel>
+                                <Input
+                                    name="password"
+                                    type="password"
+                                    placeholder="密码"
+                                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                />
+                                <FieldError style={{ display: isPwdValid.current ? 'none' : 'block' }}>
+                                    {password.length < 8 ? '密码长度至少 8 位' : ''}
+                                </FieldError>
+                            </Field>
                         </div>
 
                         <Button

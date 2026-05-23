@@ -33,9 +33,9 @@ function debugLog(req: Request, status: number, startTime: bigint) {
     const url = new URL(req.url);
     const path = url.pathname;
     const ip = (req as any).serverRequest?.socket?.remoteAddress || "127.0.0.1";
-    const duration = Number(process.hrtime.bigint() - startTime) / 1e6;
+    const duration = parseFloat((Number(process.hrtime.bigint() - startTime) / 1e6).toFixed(3));
     const color = status >= 500 ? "\x1b[31m" : status >= 400 ? "\x1b[33m" : status >= 300 ? "\x1b[36m" : "\x1b[32m";
-    console.log(`[DEBUG] ${color}%s\x1b[0m | \x1b[90m%s\x1b[0m | %s | \x1b[94m%s\x1b[0m | %.2f ms`, status, ip, method.padEnd(6), path, duration);
+    console.log(`[DEBUG] ${color}%s\x1b[0m | \x1b[90m%s\x1b[0m | %s | \x1b[94m%s\x1b[0m | ${duration.toFixed(3)} ms`, status, ip, method.padEnd(6), path);
 }
 
 function withDebugLog(handler: (req: Bun.BunRequest) => Promise<Response> | Response) {
@@ -63,7 +63,7 @@ Bun.serve({
                     const user = db.data.user_data[username];
                     if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                     const now = Math.floor(Date.now() / 1000);
-                    if (Math.abs(now - time) > 30) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
+                    if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
                     const payload = `${username}|${key}|${JSON.stringify(value)}|${time}`;
                     const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                     if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
@@ -90,7 +90,7 @@ Bun.serve({
                 const user = db.data.user_data[username];
                 if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                 const now = Math.floor(Date.now() / 1000);
-                if (Math.abs(now - time) > 30) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
+                if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
                 const payload = `${username}|${key}|${JSON.stringify(value)}|${time}`;
                 const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                 if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
@@ -121,7 +121,7 @@ Bun.serve({
                 const user = db.data.user_data[username];
                 if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
                 const now = Math.floor(Date.now() / 1000);
-                if (Math.abs(now - time) > 30) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
+                if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
                 const payload = `${username}|${key}|${value}|${time}`;
                 const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
                 if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
@@ -142,11 +142,12 @@ Bun.serve({
         "/auth/register": {
             POST: withDebugLog(async (req) => {
                 const { username, publicKey, encryptedPrivate } = await req.json() as { username: string; publicKey: string; encryptedPrivate: string };
-                if (!username || !publicKey) return Response.json({ status: "error", message: "参数不全" });
-                if (db.data.user_data[username]) return Response.json({ status: "error", message: "用户名已被注册" });
+                if (!username || !publicKey) return Response.json({ status: "error", message: "参数不全" }, { status: 400 });
+                if (username.includes('|')) return Response.json({ status: "error", message: "用户名不能包含 | 字符" }, { status: 400 });
+                if (db.data.user_data[username]) return Response.json({ status: "error", message: "用户名已被注册" }, { status: 400 });
                 db.data.user_data[username] = { publicKey, encryptedPrivate };
                 await db.write();
-                return Response.json({ status: "success", message: "注册完成" });
+                return Response.json({ status: "success", message: "注册完成" }, { status: 200 });
             })
         },
 

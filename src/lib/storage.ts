@@ -29,6 +29,11 @@ export const storage = {
             },
             body: JSON.stringify(body),
         });
+        if (response.status === 401) {
+            localStorage.clear();
+            location.reload();
+            return;
+        }
         if (!response.ok) {
             throw new Error('Failed to create new variable');
         }
