@@ -53,6 +53,7 @@ function App() {
 
     const messagesRef = useRef<ChatMessage[]>([]);
     const isSyncing = useRef(false);
+    const signedAppendRef = useRef<string | null>(null);
 
     const storageKey = `easychatv2-channel-${roomName}`;
     const localKey = `messages-${roomName}`;
@@ -69,16 +70,20 @@ function App() {
             const newMsgs = messagesRef.current.filter(m => m.time > last);
             if (newMsgs.length === 0) return;
 
-            await fetch('/api/append', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    key: storageKey,
-                    value: JSON.stringify(newMsgs),
-                }),
-            });
+            if (user && privateKey) {
+                await storage.append(storageKey, JSON.stringify(newMsgs), { username: user.username, privateKey });
+            } else {
+                await fetch('/api/append', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: storageKey,
+                        value: JSON.stringify(newMsgs),
+                    }),
+                });
+            }
 
-            // ✅ 同步成功，更新最后同步时间
+            // 同步成功，更新最后同步时间
             const maxTime = Math.max(...newMsgs.map(m => m.time));
             setLastSync(maxTime);
         } catch {}
@@ -123,7 +128,8 @@ function App() {
                     cloud = JSON.parse(data || '[]');
                 } catch (err) {
                     console.warn(err);
-                    await storage.new(storageKey, '[]');
+                    if (user && privateKey)
+                        await storage.new(storageKey, '[]', { username: user.username, privateKey });
                 }
 
                 const all = [...local, ...cloud];
@@ -197,24 +203,81 @@ function App() {
     }, [user, roomName, localKey, storageKey, publicKeyMap]);
 
     useEffect(() => {
-        const sync = () => {
+        const prepare = async () => {
             try {
                 const last = getLastSync();
                 const newMsgs = messagesRef.current.filter(m => m.time > last);
-                if (newMsgs.length === 0) return;
+                if (newMsgs.length === 0) {
+                    signedAppendRef.current = null;
+                    return;
+                }
+                if (!user || !privateKey) {
+                    signedAppendRef.current = null;
+                    return;
+                }
 
+                const time = Math.floor(Date.now() / 1000);
+                const msg = `${storageKey}|${JSON.stringify(newMsgs)}`;
+                const sig = await signMessage(msg, user.username, time, privateKey);
                 const payload = JSON.stringify({
                     key: storageKey,
                     value: JSON.stringify(newMsgs),
+                    username: user.username,
+                    time,
+                    sig,
                 });
+
                 const blob = new Blob([payload], { type: 'application/json' });
-                navigator.sendBeacon('/api/append', blob);
+                const MAX_BEACON_BYTES = 60000;
+                if (blob.size < MAX_BEACON_BYTES) {
+                    signedAppendRef.current = payload;
+                    localStorage.removeItem(`pending-append-${storageKey}`);
+                } else {
+                    signedAppendRef.current = null;
+                    localStorage.setItem(`pending-append-${storageKey}`, payload);
+                }
             } catch {}
         };
 
-        window.addEventListener('beforeunload', sync);
-        return () => window.removeEventListener('beforeunload', sync);
-    }, [storageKey]);
+        prepare();
+
+        const beforeUnloadHandler = () => {
+            try {
+                const pendingKey = `pending-append-${storageKey}`;
+                const data = signedAppendRef.current || localStorage.getItem(pendingKey);
+                if (!data) return;
+                const blob = new Blob([data], { type: 'application/json' });
+                const MAX_BEACON_BYTES = 60000;
+                if (blob.size < MAX_BEACON_BYTES) {
+                    navigator.sendBeacon('/api/append', blob);
+                } else {
+                    localStorage.setItem(pendingKey, data);
+                }
+            } catch {}
+        };
+
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+        return () => window.removeEventListener('beforeunload', beforeUnloadHandler);
+    }, [storageKey, messages, user, privateKey]);
+
+    useEffect(() => {
+        const tryFlush = async () => {
+            try {
+                const pendingKey = `pending-append-${storageKey}`;
+                const pending = localStorage.getItem(pendingKey);
+                if (!pending) return;
+                const res = await fetch('/api/append', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: pending,
+                });
+                if (res.ok) {
+                    localStorage.removeItem(pendingKey);
+                }
+            } catch {}
+        };
+        tryFlush();
+    }, [storageKey, user, privateKey]);
 
     const handleCreateRoom = () => {
         if (!newRoomName) {
