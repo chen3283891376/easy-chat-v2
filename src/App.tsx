@@ -20,7 +20,7 @@ import { Input as DialogInput } from './components/ui/input';
 import { ScrollArea as DialogScrollArea } from './components/ui/scroll-area';
 import { AuthModal } from './components/AuthModal';
 import { signMessage, verifyMessage } from './lib/ed25519';
-import { decryptPrivateKey } from './lib/aes';
+import { genNonce } from './lib/utils';
 
 interface ChatMessage {
     username: string;
@@ -127,7 +127,6 @@ function App() {
                     const data = await storage.get(storageKey);
                     cloud = JSON.parse(data || '[]');
                 } catch (err) {
-                    console.warn(err);
                     if (user && privateKey)
                         await storage.new(storageKey, '[]', { username: user.username, privateKey });
                 }
@@ -148,11 +147,13 @@ function App() {
 
         channel.on('join', async ({ alias }) => {
             if (alias === user.username) return;
+            const nonce = genNonce();
             const sig = await signMessage(
                 JSON.stringify(messagesRef.current),
                 user.username,
                 Math.floor(Date.now() / 1000),
                 privateKey,
+                nonce,
             );
             channel.send(
                 JSON.stringify({
@@ -161,6 +162,7 @@ function App() {
                     data: messagesRef.current,
                     to: alias,
                     sig,
+                    nonce,
                 }),
             );
         });
@@ -172,21 +174,39 @@ function App() {
                     if (!data.sig) return;
                     const pub = publicKeyMap[msg.alias];
                     if (!pub) return;
-                    const ok = await verifyMessage(JSON.stringify(data.data), msg.alias, data.time, data.sig, pub);
+                    const nonce = data.nonce || '';
+                    const ok = await verifyMessage(
+                        JSON.stringify(data.data),
+                        msg.alias,
+                        data.time,
+                        data.sig,
+                        pub,
+                        nonce,
+                    );
                     if (!ok) return;
                     setMessages(data.data);
                     return;
                 }
 
                 const { username: sendUser, msg: content, time, sig } = data;
-                console.log(data);
                 if (!sig) return;
-                const pub = publicKeyMap[sendUser];
-                console.log(pub);
+                let pub = publicKeyMap[sendUser];
+                if (!pub) {
+                    // 可能公钥列表被更新了，尝试重新获取一次
+                    try {
+                        const res = await fetch('/api/user/public-keys');
+                        const resData = await res.json();
+                        if (resData.status === 'success') {
+                            setPublicKeyMap(resData.data);
+                            pub = resData.data[sendUser];
+                        }
+                    } catch {}
+                }
                 if (!pub) return;
+                const nonce = data.nonce || '';
                 const now = Math.floor(Date.now() / 1000);
-                if (Math.abs(now - time) > 30) return;
-                const ok = await verifyMessage(content, sendUser, time, sig, pub);
+                if (Math.abs(now - time) > 10) return;
+                const ok = await verifyMessage(content, sendUser, time, sig, pub, nonce);
                 if (!ok) return;
 
                 setMessages(prev => {
@@ -218,13 +238,15 @@ function App() {
 
                 const time = Math.floor(Date.now() / 1000);
                 const msg = `${storageKey}|${JSON.stringify(newMsgs)}`;
-                const sig = await signMessage(msg, user.username, time, privateKey);
+                const nonce = genNonce();
+                const sig = await signMessage(msg, user.username, time, privateKey, nonce);
                 const payload = JSON.stringify({
                     key: storageKey,
                     value: JSON.stringify(newMsgs),
                     username: user.username,
                     time,
                     sig,
+                    nonce,
                 });
 
                 const blob = new Blob([payload], { type: 'application/json' });
@@ -308,8 +330,9 @@ function App() {
         if (!user || !input || !socketRef.current || !privateKey) return;
         const time = Math.floor(Date.now() / 1000);
         const msg = input.trim();
-        const sig = await signMessage(msg, user.username, time, privateKey);
-        const data = { username: user.username, msg, time, sig };
+        const nonce = genNonce();
+        const sig = await signMessage(msg, user.username, time, privateKey, nonce);
+        const data = { username: user.username, msg, time, sig, nonce };
 
         socketRef.current.send(JSON.stringify(data));
         setMessages(p => [...p, data]);
@@ -321,42 +344,10 @@ function App() {
         }
     };
 
-    const handleLoginSuccess = (userInfo: { username: string; publicKey: string }) => {
+    const handleLoginSuccess = (userInfo: { username: string; publicKey: string }, privateKey: string) => {
         setUser(userInfo);
+        setPrivateKey(privateKey);
     };
-
-    useEffect(() => {
-        if (!user) return;
-        const unlock = () => {
-            const encryptedPrivate = localStorage.getItem('chat-encrypted-private');
-            if (!encryptedPrivate) return;
-
-            const unlockedUser = localStorage.getItem('chat-key-unlocked');
-            const savedPwd = localStorage.getItem('chat-unlock-pwd');
-
-            if (unlockedUser === user.username && savedPwd) {
-                const decrypted = decryptPrivateKey(encryptedPrivate, savedPwd);
-                if (decrypted) {
-                    setPrivateKey(decrypted);
-                    return;
-                }
-                localStorage.removeItem('chat-key-unlocked');
-                localStorage.removeItem('chat-unlock-pwd');
-            }
-
-            const pwd = prompt('请输入密码解锁私钥：') || '';
-            const decrypted = decryptPrivateKey(encryptedPrivate, pwd);
-            if (decrypted) {
-                setPrivateKey(decrypted);
-                localStorage.setItem('chat-key-unlocked', user.username);
-                localStorage.setItem('chat-unlock-pwd', pwd);
-                toast.success('私钥已解锁');
-            } else {
-                toast.error('密码错误');
-            }
-        };
-        unlock();
-    }, [user]);
 
     useEffect(() => {
         if (!user) return;
