@@ -33,6 +33,7 @@ interface ChatContextType {
     input: string;
     publicKeyMap: Record<string, string>;
     setUser: (user: User | null, privateKey?: string) => void;
+    setRoomList: (rooms: Room[]) => void;
     createRoom: (roomName: string) => Promise<void>;
     joinRoomById: (roomId: string, roomName: string) => Promise<void>;
     switchToRoom: (room: Room) => Promise<void>;
@@ -370,6 +371,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 input,
                 publicKeyMap,
                 setUser,
+                setRoomList: setRoomListState,
                 createRoom,
                 joinRoomById,
                 switchToRoom,
