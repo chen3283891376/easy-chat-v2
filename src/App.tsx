@@ -27,6 +27,7 @@ interface ChatMessage {
     msg: string;
     time: number;
     sig?: string;
+    nonce?: string; // 保留 nonce 字段
 }
 
 function App() {
@@ -54,6 +55,24 @@ function App() {
     const messagesRef = useRef<ChatMessage[]>([]);
     const isSyncing = useRef(false);
     const signedAppendRef = useRef<string | null>(null);
+
+    // === 本地 nonce 去重池 ===
+    const localNonceSet = useRef<Set<string>>(new Set());
+    const NONCE_EXPIRE_SECONDS = 60; // 60秒自动清理
+
+    const isNonceUsedLocally = (nonce: string): boolean => {
+        if (!nonce) return false;
+        const used = localNonceSet.current.has(nonce);
+        if (!used) localNonceSet.current.add(nonce);
+        return used;
+    };
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            localNonceSet.current.clear();
+        }, NONCE_EXPIRE_SECONDS * 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     const storageKey = `easychatv2-channel-${roomName}`;
     const localKey = `messages-${roomName}`;
@@ -170,6 +189,11 @@ function App() {
         channel.on('message', async msg => {
             try {
                 const data = JSON.parse(msg.message);
+
+                if (data.nonce && isNonceUsedLocally(data.nonce)) {
+                    return;
+                }
+
                 if (data.type === 'message' && data.to === user.username) {
                     if (!data.sig) return;
                     const pub = publicKeyMap[msg.alias];
@@ -325,7 +349,6 @@ function App() {
         setJoinRoomName('');
     };
 
-    // 发送消息 + 每 30 条自动增量同步
     const handleSend = async () => {
         if (!user || !input || !socketRef.current || !privateKey) return;
         const time = Math.floor(Date.now() / 1000);
@@ -333,6 +356,8 @@ function App() {
         const nonce = genNonce();
         const sig = await signMessage(msg, user.username, time, privateKey, nonce);
         const data = { username: user.username, msg, time, sig, nonce };
+
+        isNonceUsedLocally(nonce);
 
         socketRef.current.send(JSON.stringify(data));
         setMessages(p => [...p, data]);
