@@ -25,16 +25,16 @@ function ChatApp() {
     const [joinRoomId, setJoinRoomId] = useState('');
     const [joinRoomName, setJoinRoomName] = useState('');
 
-    const handleCreateRoom = () => {
+    const handleCreateRoom = async () => {
         if (!newRoomName) return toast.info('房间名不能为空');
-        createRoom(newRoomName);
+        await createRoom(newRoomName);
         setNewRoomName('');
     };
 
-    const handleJoinRoom = () => {
+    const handleJoinRoom = async () => {
         if (!joinRoomId) return toast.info('请输入房间ID');
         if (!joinRoomName) return toast.info('请输入房间显示名');
-        joinRoomById(joinRoomId, joinRoomName);
+        await joinRoomById(joinRoomId, joinRoomName);
     };
 
     if (!user) return <AuthModal onLoginSuccess={setUser} />;

@@ -5,12 +5,13 @@ import { signMessage, verifyMessage } from '../lib/ed25519';
 import { genNonce } from '../lib/utils';
 import { genRoomId } from '../lib/utils';
 
-interface ChatMessage {
+export interface ChatMessage {
     username: string;
     msg: string;
     time: number;
     sig?: string;
     nonce?: string;
+    quote?: ChatMessage;
 }
 
 interface User {
@@ -32,11 +33,13 @@ interface ChatContextType {
     input: string;
     publicKeyMap: Record<string, string>;
     setUser: (user: User | null, privateKey?: string) => void;
-    createRoom: (roomName: string) => void;
-    joinRoomById: (roomId: string, roomName: string) => void;
+    createRoom: (roomName: string) => Promise<void>;
+    joinRoomById: (roomId: string, roomName: string) => Promise<void>;
     switchToRoom: (room: Room) => Promise<void>;
     setInput: (v: string) => void;
     handleSend: () => Promise<void>;
+    quoteMessage: ChatMessage | null;
+    setQuoteMessage: (msg: ChatMessage | null) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -59,6 +62,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const signedAppendRef = useRef<string | null>(null);
     const localNonceSet = useRef<Set<string>>(new Set());
     const NONCE_EXPIRE_SECONDS = 60;
+
+    const [quoteMessage, setQuoteMessage] = useState<ChatMessage | null>(null);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -111,25 +116,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setCurrentRoom(room);
     };
 
-    const createRoom = (roomName: string) => {
+    const createRoom = async (roomName: string) => {
         const id = genRoomId();
         const newRoom: Room = { id, name: roomName };
         setRoomListState(prev => {
             const exists = prev.some(r => r.id === id);
             return exists ? prev : [...prev, newRoom];
         });
-        switchToRoom(newRoom);
+        await switchToRoom(newRoom);
     };
 
-    const joinRoomById = (roomId: string, roomName: string) => {
+    const joinRoomById = async (roomId: string, roomName: string) => {
         const target = roomList.find(r => r.id === roomId);
         if (target) {
-            switchToRoom(target);
+            await switchToRoom(target);
             return;
         }
         const newRoom: Room = { id: roomId, name: roomName };
         setRoomListState(prev => [...prev, newRoom]);
-        switchToRoom(newRoom);
+        await switchToRoom(newRoom);
     };
 
     const handleSend = async () => {
@@ -138,12 +143,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const msg = input.trim();
         const nonce = genNonce();
         const sig = await signMessage(msg, user.username, time, privateKey, nonce);
-        const data = { username: user.username, msg, time, sig, nonce };
+        const data = { username: user.username, msg, time, sig, nonce, quote: quoteMessage || undefined };
 
         isNonceUsedLocally(nonce);
         socketRef.current.send(JSON.stringify(data));
         setMessages(prev => [...prev, data]);
         setInputState('');
+
+        // 如果缓存消息 >= 20 条，就立即同步到云端
+        const last = getLastSync();
+        const newMsgs = messagesRef.current.filter(m => m.time > last);
+        if (newMsgs.length >= 20) {
+            await syncToCloud();
+        }
+
+        if (quoteMessage) setQuoteMessage(null);
     };
 
     useEffect(() => {
@@ -361,6 +375,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 switchToRoom,
                 setInput: setInputState,
                 handleSend,
+                quoteMessage,
+                setQuoteMessage,
             }}
         >
             {children}
