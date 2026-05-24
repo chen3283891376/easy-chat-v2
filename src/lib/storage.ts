@@ -53,19 +53,23 @@ export const storage = {
     },
 
     append: async (key: string, value: any, auth?: Auth) => {
-        const body: any = { key, value };
+        let payload;
         if (auth) {
             const time = Math.floor(Date.now() / 1000);
             const nonce = genNonce();
             const msg = `${key}|${value}`;
             const sig = await signMessage(msg, auth.username, time, auth.privateKey, nonce);
 
-            body.username = auth.username;
-            body.time = time;
-            body.sig = sig;
-            body.nonce = nonce;
+            payload = JSON.stringify({
+                key,
+                value,
+                username: auth.username,
+                time,
+                sig,
+                nonce,
+            })
         }
-        const response = await fetch('/api/append', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const response = await fetch('/api/append', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload });
         if (!response.ok) throw new Error('Failed to append value in storage');
     }
 };
