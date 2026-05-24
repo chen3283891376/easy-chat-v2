@@ -2,27 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { connect, type IttySocket } from 'itty-sockets';
 import { storage } from '../lib/storage';
 import { signMessage, verifyMessage } from '../lib/ed25519';
-import { genNonce } from '../lib/utils';
-import { genRoomId } from '../lib/utils';
-
-export interface ChatMessage {
-    username: string;
-    msg: string;
-    time: number;
-    sig?: string;
-    nonce?: string;
-    quote?: ChatMessage;
-}
-
-interface User {
-    username: string;
-    publicKey: string;
-}
-
-interface Room {
-    id: string; // 唯一ID（业务标识）
-    name: string; // 显示名称
-}
+import { genMessageId, genNonce, genRoomId } from '../lib/utils';
+import type { User, Room, ChatMessage } from '@/types/message';
 
 interface ChatContextType {
     user: User | null;
@@ -39,8 +20,9 @@ interface ChatContextType {
     switchToRoom: (room: Room) => Promise<void>;
     setInput: (v: string) => void;
     handleSend: () => Promise<void>;
-    quoteMessage: ChatMessage | null;
-    setQuoteMessage: (msg: ChatMessage | null) => void;
+    quoteMsgId?: string | null;
+    setQuoteMsgId: (id: string | null) => void;
+    recallMessage: (messageId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -64,7 +46,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const localNonceSet = useRef<Set<string>>(new Set());
     const NONCE_EXPIRE_SECONDS = 60;
 
-    const [quoteMessage, setQuoteMessage] = useState<ChatMessage | null>(null);
+    const [quoteMsgId, setQuoteMsgId] = useState<string | null>(null);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -143,8 +125,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const time = Math.floor(Date.now() / 1000);
         const msg = input.trim();
         const nonce = genNonce();
+        const id = genMessageId();
         const sig = await signMessage(msg, user.username, time, privateKey, nonce);
-        const data = { username: user.username, msg, time, sig, nonce, quote: quoteMessage || undefined };
+        const data = { id, username: user.username, msg, time, sig, nonce, quoteId: quoteMsgId || undefined };
 
         isNonceUsedLocally(nonce);
         socketRef.current.send(JSON.stringify(data));
@@ -158,7 +141,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             await syncToCloud();
         }
 
-        if (quoteMessage) setQuoteMessage(null);
+        if (quoteMsgId) setQuoteMsgId(null);
+    };
+
+    const recallMessage = async (messageId: string) => {
+        // 乐观本地撤回
+        setMessages(prev => prev.map(msg => (msg.id === messageId ? { ...msg, recalled: true } : msg)));
+
+        // 通知其他客户端撤回
+        try {
+            socketRef.current?.send(JSON.stringify({ type: 'recall', id: messageId }));
+        } catch (e) {
+            // 如果发送失败，不阻塞，保持本地状态
+            console.error('recall send failed', e);
+        }
     };
 
     useEffect(() => {
@@ -228,6 +224,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                     );
                     if (!ok) return;
                     setMessages(data.data);
+                    return;
+                }
+
+                if (data.type === 'recall') {
+                    setMessages(prev => prev.map(m => (m.id === data.id ? { ...m, recalled: true } : m)));
                     return;
                 }
 
@@ -377,8 +378,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 switchToRoom,
                 setInput: setInputState,
                 handleSend,
-                quoteMessage,
-                setQuoteMessage,
+                quoteMsgId,
+                setQuoteMsgId,
+                recallMessage,
             }}
         >
             {children}
