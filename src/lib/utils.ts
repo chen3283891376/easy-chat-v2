@@ -11,3 +11,7 @@ export function genNonce() {
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
 }
+
+export function genRoomId(): string {
+    return 'room_' + Math.random().toString(36).substring(2, 10);
+}
