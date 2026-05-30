@@ -18,12 +18,27 @@ import {
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { toast } from 'sonner';
+import { CheckIcon, EditIcon, LogOutIcon, XIcon } from 'lucide-react';
 
 function ChatApp() {
-    const { user, currentRoom, createRoom, joinRoomById, setUser } = useChat();
+    const { user, currentRoom, createRoom, joinRoomById, setUser, logout, changeUsername } = useChat();
     const [newRoomName, setNewRoomName] = useState('');
     const [joinRoomId, setJoinRoomId] = useState('');
     const [joinRoomName, setJoinRoomName] = useState('');
+    const [isEditingUsername, setIsEditingUsername] = useState(false);
+    const [editNameInput, setEditNameInput] = useState(user?.username || '');
+
+    const onUsernameSave = async (newName: string) => {
+        if (!newName) return toast.info('用户名不能为空');
+        if (newName.includes('|')) return toast.error('用户名不能包含 | 字符');
+        try {
+            await changeUsername(newName);
+            toast.success('用户名修改成功');
+            setIsEditingUsername(false);
+        } catch (err: any) {
+            toast.error(err?.message || '修改用户名失败');
+        }
+    };
 
     const handleCreateRoom = async () => {
         if (!newRoomName) return toast.info('房间名不能为空');
@@ -98,7 +113,45 @@ function ChatApp() {
                     </DialogContent>
                 </Dialog>
 
-                <div className="text-xs text-muted-foreground mt-auto">用户：{user.username}</div>
+                <div className="flex items-center justify-between">
+                    <div className=" text-sm text-muted-foreground mt-auto">
+                        用户：
+                        {!isEditingUsername ? (
+                            <span className="ml-1">{user.username}</span>
+                        ) : (
+                            <>
+                                <Input
+                                    value={editNameInput}
+                                    onChange={e => setEditNameInput(e.target.value)}
+                                    placeholder="请输入用户名"
+                                    className="w-24"
+                                />
+                                <Button variant="ghost" size="icon-sm" onClick={() => onUsernameSave(editNameInput)}>
+                                    <CheckIcon className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon-sm" onClick={() => setIsEditingUsername(false)}>
+                                    <XIcon className="h-4 w-4" />
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                    {!isEditingUsername && (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="icon-sm"
+                                onClick={() => {
+                                    setIsEditingUsername(true);
+                                    setEditNameInput(user.username);
+                                }}
+                            >
+                                <EditIcon />
+                            </Button>
+                            <Button size={'icon-sm'} onClick={logout}>
+                                <LogOutIcon />
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="flex-1 flex flex-col">

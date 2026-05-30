@@ -74,6 +74,7 @@ export const storage = {
     },
     getRooms: async (_username: string, _auth?: Auth) => { },
     setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => { },
+    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => { },
 };
 
 // Rooms API: 获取用户保存的房间列表
@@ -107,4 +108,23 @@ storage.setRooms = async (username: string, newRooms: string, auth?: Auth) => {
     });
     if (!res.ok) throw new Error('Failed to set rooms');
     return;
+};
+
+// Change username API
+storage.changeUsername = async (oldUsername: string, newUsername: string, auth?: Auth) => {
+    if (!auth) throw new Error('Auth required');
+    const time = Math.floor(Date.now() / 1000);
+    const nonce = genNonce();
+    // signMessage will produce payload: `${oldUsername}|${newUsername}|${time}|${nonce}`
+    const sig = await signMessage(newUsername, oldUsername, time, auth.privateKey, nonce);
+
+    const body = { oldUsername, newUsername, sig, time, nonce };
+    const res = await fetch('/api/user/name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || 'Failed to change username');
+    return data;
 };

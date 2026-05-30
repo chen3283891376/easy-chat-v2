@@ -86,10 +86,12 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                             <QuoteIcon />
                                             引用
                                         </ContextMenuItem>
-                                        <ContextMenuItem onClick={() => recallMessage(message.id)}>
-                                            <UndoIcon />
-                                            撤回
-                                        </ContextMenuItem>
+                                        {isCurrentUser && (
+                                            <ContextMenuItem onClick={() => recallMessage(message.id)}>
+                                                <UndoIcon />
+                                                撤回
+                                            </ContextMenuItem>
+                                        )}
                                     </ContextMenuGroup>
                                 </ContextMenuContent>
                             </ContextMenu>

@@ -210,6 +210,29 @@ Bun.serve({
             })
         },
 
+        "/user/name": {
+            POST: withDebugLog(async (req) => {
+                const { oldUsername, newUsername, sig, time, nonce } = await req.json() as { oldUsername: string; newUsername: string; sig: string; time: number; nonce: string };
+                if (!oldUsername || !newUsername || !sig || !time || !nonce) return Response.json({ status: "error", message: "缺少认证参数" }, { status: 401 });
+                if (usedNonce.has(nonce)) return Response.json({ status: "error", message: "请求重复或已过期" }, { status: 400 });
+                usedNonce.add(nonce);
+
+                const user = db.data.user_data[oldUsername];
+                if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 404 });
+                const now = Math.floor(Date.now() / 1000);
+                if (Math.abs(now - time) > 10) return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
+                const payload = `${oldUsername}|${newUsername}|${time}|${nonce}`;
+                const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
+                if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
+
+                if (db.data.user_data[newUsername]) return Response.json({ status: "error", message: "新用户名已被占用" }, { status: 400 });
+                db.data.user_data[newUsername] = user;
+                delete db.data.user_data[oldUsername];
+                await db.write();
+                return Response.json({ status: "success", message: "用户名修改成功" }, { status: 200 });
+            })
+        },
+
         "/auth/rooms/:username": {
             GET: withDebugLog(async (req) => {
                 // Accept sig/timestamp/nonce from either route params or query string for robustness
