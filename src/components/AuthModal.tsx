@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { generateKeyPair } from '@/lib/ed25519';
 import { encryptPrivateKey, decryptPrivateKey } from '@/lib/aes';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
     const [password, setPassword] = useState('');
     const [isRegister, setIsRegister] = useState(false);
     const [loading, setLoading] = useState(false);
-    const isPwdValid = useRef(false);
+    const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
         const localUser = localStorage.getItem('chat-user');
@@ -42,8 +42,15 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
         }
     }, [onLoginSuccess]);
 
+    // 实时校验密码，状态同步更新
     useEffect(() => {
-        isPwdValid.current = password.length >= 8;
+        if (password.length === 0) {
+            setPasswordError('');
+        } else if (password.length < 8) {
+            setPasswordError('密码长度至少 8 位');
+        } else {
+            setPasswordError('');
+        }
     }, [password]);
 
     // ====================== 注册 ======================
@@ -56,6 +63,11 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
             toast.error('用户名不能包含 | 字符');
             return;
         }
+        if (password.length < 8) {
+            toast.error('密码长度至少 8 位');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -151,38 +163,30 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
 
                 <form method="post" autoComplete="on" onSubmit={e => e.preventDefault()}>
                     <div className="space-y-4 py-4">
-                        <div className="space-y-2">
+                        <Field>
+                            <FieldLabel>用户名</FieldLabel>
                             <Input
                                 name="username"
                                 type="text"
-                                placeholder="用户名"
+                                placeholder="请输入用户名"
                                 autoComplete="username"
                                 value={username}
                                 onChange={e => setUsername(e.target.value)}
                             />
-                            {/* <Input
+                        </Field>
+
+                        <Field data-invalid={!!passwordError}>
+                            <FieldLabel>密码</FieldLabel>
+                            <Input
                                 name="password"
                                 type="password"
-                                placeholder="密码"
+                                placeholder="请输入密码（至少8位）"
                                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
-                            /> */}
-                            <Field data-invalid={isPwdValid.current}>
-                                <FieldLabel>密码</FieldLabel>
-                                <Input
-                                    name="password"
-                                    type="password"
-                                    placeholder="密码"
-                                    autoComplete={isRegister ? 'new-password' : 'current-password'}
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                />
-                                <FieldError style={{ display: isPwdValid.current ? 'none' : 'block' }}>
-                                    {password.length < 8 ? '密码长度至少 8 位' : ''}
-                                </FieldError>
-                            </Field>
-                        </div>
+                            />
+                            <FieldError>{passwordError}</FieldError>
+                        </Field>
 
                         <Button
                             className="w-full"

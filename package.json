@@ -8,7 +8,8 @@
         "build": "tsc -b && vite build",
         "lint": "eslint .",
         "preview": "vite preview",
-        "format": "prettier --write ."
+        "format": "prettier --write .",
+        "serve": "cd server && bun run dev"
     },
     "dependencies": {
         "@fontsource-variable/geist": "^5.2.8",

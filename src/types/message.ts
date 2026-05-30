@@ -3,6 +3,7 @@ export interface ChatMessage {
     username: string;
     msg: string;
     time: number;
+    publicKey?: string;
     sig?: string;
     nonce?: string;
     quoteId?: string;
