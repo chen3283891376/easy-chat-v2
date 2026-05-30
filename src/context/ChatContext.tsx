@@ -14,7 +14,7 @@ interface ChatContextType {
     input: string;
     publicKeyMap: Record<string, string>;
     setUser: (user: User | null, privateKey?: string) => void;
-    setRoomList: (rooms: Room[]) => void;
+    setRoomList: (rooms: Room[]) => Promise<void>;
     createRoom: (roomName: string) => Promise<void>;
     joinRoomById: (roomId: string, roomName: string) => Promise<void>;
     switchToRoom: (room: Room) => Promise<void>;
@@ -102,10 +102,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const createRoom = async (roomName: string) => {
         const id = genRoomId();
         const newRoom: Room = { id, name: roomName };
-        setRoomListState(prev => {
-            const exists = prev.some(r => r.id === id);
-            return exists ? prev : [...prev, newRoom];
-        });
+        const updated = roomList.some(r => r.id === id) ? roomList : [...roomList, newRoom];
+        await setRoomList(updated);
         await switchToRoom(newRoom);
     };
 
@@ -116,7 +114,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             return;
         }
         const newRoom: Room = { id: roomId, name: roomName };
-        setRoomListState(prev => [...prev, newRoom]);
+
+        const updated = [...roomList, newRoom];
+        await setRoomList(updated);
         await switchToRoom(newRoom);
     };
 
@@ -292,7 +292,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 });
 
                 const blob = new Blob([payload], { type: 'application/json' });
-                const MAX_BEACON_BYTES = 6000;
+                const MAX_BEACON_BYTES = 60000;
                 if (blob.size < MAX_BEACON_BYTES) {
                     signedAppendRef.current = payload;
                     localStorage.removeItem(`pending-append-${storageKey}`);
@@ -305,9 +305,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         prepare();
 
-        const beforeUnloadHandler = () => {
+        const visibilityChangeHandler = () => {
+            if (document.visibilityState === 'visible') return;
             try {
+                const last = getLastSync();
+                const newMsgs = messagesRef.current.filter(m => m.time > last);
+
                 const pendingKey = `pending-append-${storageKey}`;
+                if (newMsgs.length === 0) return;
                 const data = signedAppendRef.current || localStorage.getItem(pendingKey);
                 if (!data) return;
                 const blob = new Blob([data], { type: 'application/json' });
@@ -320,8 +325,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             } catch {}
         };
 
-        window.addEventListener('beforeunload', beforeUnloadHandler);
-        return () => window.removeEventListener('beforeunload', beforeUnloadHandler);
+        window.addEventListener('visibilitychange', visibilityChangeHandler);
+        return () => window.removeEventListener('visibilitychange', visibilityChangeHandler);
     }, [storageKey, messages, user, privateKey]);
 
     useEffect(() => {
@@ -359,6 +364,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const setUser = (user: User | null, pk = '') => {
         setUserState(user);
         setPrivateKeyState(pk);
+
+        // 异步拉取用户房间列表并覆盖本地缓存（仅当登录时）
+        (async () => {
+            try {
+                if (user && pk) {
+                    const roomsStr: any = await storage.getRooms(user.username, {
+                        username: user.username,
+                        privateKey: pk,
+                    });
+                    if (roomsStr) {
+                        try {
+                            const parsed = JSON.parse(roomsStr);
+                            if (Array.isArray(parsed)) {
+                                setRoomListState(parsed);
+                            }
+                        } catch {}
+                    }
+                }
+            } catch (e) {
+                // ignore fetch errors
+            }
+        })();
+    };
+
+    const setRoomList = async (rooms: Room[]) => {
+        setRoomListState(rooms);
+        try {
+            if (user && privateKey) {
+                await storage.setRooms(user.username, JSON.stringify(rooms), { username: user.username, privateKey });
+            }
+        } catch (e) {
+            console.error('Failed to save rooms to server', e);
+        }
     };
 
     return (
@@ -372,7 +410,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 input,
                 publicKeyMap,
                 setUser,
-                setRoomList: setRoomListState,
+                setRoomList: setRoomList,
                 createRoom,
                 joinRoomById,
                 switchToRoom,
