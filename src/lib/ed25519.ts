@@ -39,6 +39,13 @@ export async function signMessage(
     return toHex(sig);
 }
 
+// 签名任意负载（不加入 username/time/nonce 前缀）
+export async function signRaw(payload: string, privateKeyHex: string) {
+    const data = new TextEncoder().encode(payload);
+    const sig = await ed.signAsync(data, fromHex(privateKeyHex));
+    return toHex(sig);
+}
+
 // 验签
 export async function verifyMessage(
     msg: string,
