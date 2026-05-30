@@ -83,7 +83,16 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         const nonce = genNonce();
         const id = genMessageId();
         const sig = await signMessage(msg, user.username, time, privateKey, nonce);
-        const data = { id, username: user.username, msg, time, sig, nonce, quoteId: quoteMsgId || undefined };
+        const data = {
+            id,
+            username: user.username,
+            msg,
+            time,
+            sig,
+            nonce,
+            quoteId: quoteMsgId || undefined,
+            publicKey: user.publicKey,
+        };
 
         isNonceUsedLocally(nonce);
         socketRef.current.send(JSON.stringify(data));
@@ -176,9 +185,14 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                const { username: sendUser, msg: content, time, sig, nonce } = data;
+                const { username: sendUser, msg: content, time, sig, nonce, publicKey } = data;
                 if (!sig) return;
-                let pub = publicKeyMap[sendUser];
+                // If sender included publicKey in message, trust and cache it for this username
+                if (publicKey) {
+                    setPublicKeyMap(prev => ({ ...prev, [sendUser]: publicKey }));
+                }
+
+                let pub = publicKeyMap[sendUser] || publicKey;
                 if (!pub) {
                     const res = await fetch('/api/user/public-keys');
                     const d = await res.json();
