@@ -72,7 +72,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             });
             const maxTime = Math.max(...newMsgs.map(m => m.time));
             setLastSync(maxTime);
-        } catch {}
+        } catch {
+            /* empty */
+        }
         isSyncing.current = false;
     };
 
@@ -110,7 +112,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, recalled: true } : m)));
         try {
             socketRef.current?.send(JSON.stringify({ type: 'recall', id: messageId }));
-        } catch {}
+        } catch {
+            /* empty */
+        }
     };
 
     useEffect(() => {
@@ -134,7 +138,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 const map = new Map<string, ChatMessage>();
                 all.forEach(m => map.set(`${m.time}|${m.username}|${m.msg}`, m));
                 setMessages(Array.from(map.values()).sort((a, b) => a.time - b.time));
-            } catch {}
+            } catch {
+                /* empty */
+            }
         });
 
         channel.on('join', async ({ alias }) => {
@@ -207,13 +213,15 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                     if (prev.some(m => m.time === time && m.username === sendUser && m.msg === content)) return prev;
                     return [...prev, data];
                 });
-            } catch {}
+            } catch {
+                /* empty */
+            }
         });
 
         return () => {
             channel.close();
         };
-    }, [user, currentRoom.id, publicKeyMap]);
+    }, [user, currentRoom.id, publicKeyMap, localKey, storageKey, privateKey]);
 
     useEffect(() => {
         if (!user) return;

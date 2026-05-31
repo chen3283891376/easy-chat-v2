@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { generateKeyPair } from '@/lib/ed25519';
 import { encryptPrivateKey, decryptPrivateKey } from '@/lib/aes';
 import { toast } from 'sonner';
@@ -17,7 +17,6 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
     const [password, setPassword] = useState('');
     const [isRegister, setIsRegister] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
         const localUser = localStorage.getItem('chat-user');
@@ -35,23 +34,17 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                         localStorage.removeItem('chat-unlock-pwd');
                         localStorage.removeItem('chat-key-unlocked');
                     }
-                } catch (e) {
+                } catch {
                     localStorage.removeItem('chat-unlock-pwd');
                 }
             }
         }
     }, [onLoginSuccess]);
 
-    // 实时校验密码，状态同步更新
-    useEffect(() => {
-        if (password.length === 0) {
-            setPasswordError('');
-        } else if (password.length < 8) {
-            setPasswordError('密码长度至少 8 位');
-        } else {
-            setPasswordError('');
-        }
-    }, [password]);
+    const passwordError = useMemo(
+        () => (password.length > 0 && password.length < 8 ? '密码长度至少 8 位' : ''),
+        [password],
+    );
 
     // ====================== 注册 ======================
     const handleRegister = async () => {
@@ -144,7 +137,7 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
             } else {
                 toast.error(data.message);
             }
-        } catch (err) {
+        } catch {
             toast.error('登录失败');
         }
 

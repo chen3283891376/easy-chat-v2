@@ -1,12 +1,12 @@
-import * as ed from "@noble/ed25519";
+import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
 
 ed.hashes.sha512 = sha512;
 
 function toHex(bytes: Uint8Array): string {
     return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 }
 
 function fromHex(hex: string): Uint8Array {
@@ -27,13 +27,7 @@ export async function generateKeyPair() {
 }
 
 // 签名消息
-export async function signMessage(
-    msg: string,
-    username: string,
-    time: number,
-    privateKeyHex: string,
-    nonce: string
-) {
+export async function signMessage(msg: string, username: string, time: number, privateKeyHex: string, nonce: string) {
     const data = new TextEncoder().encode(`${username}|${msg}|${time}|${nonce}`);
     const sig = await ed.signAsync(data, fromHex(privateKeyHex));
     return toHex(sig);
@@ -53,15 +47,11 @@ export async function verifyMessage(
     time: number,
     sigHex: string,
     publicKeyHex: string,
-    nonce: string
+    nonce: string,
 ) {
     try {
         const data = new TextEncoder().encode(`${username}|${msg}|${time}|${nonce}`);
-        return await ed.verifyAsync(
-            fromHex(sigHex),
-            data,
-            fromHex(publicKeyHex)
-        );
+        return await ed.verifyAsync(fromHex(sigHex), data, fromHex(publicKeyHex));
     } catch {
         return false;
     }

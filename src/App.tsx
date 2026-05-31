@@ -35,8 +35,8 @@ function ChatApp() {
             await changeUsername(newName);
             toast.success('用户名修改成功');
             setIsEditingUsername(false);
-        } catch (err: any) {
-            toast.error(err?.message || '修改用户名失败');
+        } catch (err) {
+            toast.error((err as Error).message || '修改用户名失败');
         }
     };
 

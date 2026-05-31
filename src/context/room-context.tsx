@@ -36,7 +36,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
                     privateKey,
                 });
             }
-        } catch {}
+        } catch {
+            /* empty */
+        }
     };
 
     const switchToRoom = async (room: Room) => {
