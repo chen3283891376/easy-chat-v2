@@ -91,7 +91,8 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             sig,
             nonce,
             quoteId: quoteMsgId || undefined,
-            publicKey: user.publicKey,
+            publicKey: user.publicKey.slice(-16),
+            // publicKey: user.publicKey,
         };
 
         isNonceUsedLocally(nonce);
@@ -185,14 +186,10 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                const { username: sendUser, msg: content, time, sig, nonce, publicKey } = data;
+                const { username: sendUser, msg: content, time, sig, nonce } = data;
                 if (!sig) return;
-                // If sender included publicKey in message, trust and cache it for this username
-                if (publicKey) {
-                    setPublicKeyMap(prev => ({ ...prev, [sendUser]: publicKey }));
-                }
 
-                let pub = publicKeyMap[sendUser] || publicKey;
+                let pub = publicKeyMap[sendUser];
                 if (!pub) {
                     const res = await fetch('/api/user/public-keys');
                     const d = await res.json();
