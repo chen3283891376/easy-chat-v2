@@ -72,7 +72,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             });
             const maxTime = Math.max(...newMsgs.map(m => m.time));
             setLastSync(maxTime);
-        } catch {}
+        } catch {
+            /* empty */
+        }
         isSyncing.current = false;
     };
 
@@ -91,7 +93,8 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             sig,
             nonce,
             quoteId: quoteMsgId || undefined,
-            publicKey: user.publicKey,
+            publicKey: user.publicKey.slice(-16),
+            // publicKey: user.publicKey,
         };
 
         isNonceUsedLocally(nonce);
@@ -109,7 +112,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, recalled: true } : m)));
         try {
             socketRef.current?.send(JSON.stringify({ type: 'recall', id: messageId }));
-        } catch {}
+        } catch {
+            /* empty */
+        }
     };
 
     useEffect(() => {
@@ -133,7 +138,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 const map = new Map<string, ChatMessage>();
                 all.forEach(m => map.set(`${m.time}|${m.username}|${m.msg}`, m));
                 setMessages(Array.from(map.values()).sort((a, b) => a.time - b.time));
-            } catch {}
+            } catch {
+                /* empty */
+            }
         });
 
         channel.on('join', async ({ alias }) => {
@@ -185,14 +192,10 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                const { username: sendUser, msg: content, time, sig, nonce, publicKey } = data;
+                const { username: sendUser, msg: content, time, sig, nonce } = data;
                 if (!sig) return;
-                // If sender included publicKey in message, trust and cache it for this username
-                if (publicKey) {
-                    setPublicKeyMap(prev => ({ ...prev, [sendUser]: publicKey }));
-                }
 
-                let pub = publicKeyMap[sendUser] || publicKey;
+                let pub = publicKeyMap[sendUser];
                 if (!pub) {
                     const res = await fetch('/api/user/public-keys');
                     const d = await res.json();
@@ -210,13 +213,15 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                     if (prev.some(m => m.time === time && m.username === sendUser && m.msg === content)) return prev;
                     return [...prev, data];
                 });
-            } catch {}
+            } catch {
+                /* empty */
+            }
         });
 
         return () => {
             channel.close();
         };
-    }, [user, currentRoom.id, publicKeyMap]);
+    }, [user, currentRoom.id, publicKeyMap, localKey, storageKey, privateKey]);
 
     useEffect(() => {
         if (!user) return;

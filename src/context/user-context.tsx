@@ -23,18 +23,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
         (async () => {
             try {
                 if (user && pk) {
-                    const roomsStr: any = await storage.getRooms(user.username, {
+                    const roomsStr: unknown = await storage.getRooms(user.username, {
                         username: user.username,
                         privateKey: pk,
                     });
                     if (roomsStr) {
-                        const parsed = JSON.parse(roomsStr);
+                        const parsed = JSON.parse(roomsStr as string);
                         if (Array.isArray(parsed)) {
                             localStorage.setItem('chat-rooms', JSON.stringify(parsed));
                         }
                     }
                 }
-            } catch {}
+            } catch {
+                /* empty */
+            }
         })();
     };
 

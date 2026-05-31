@@ -16,4 +16,4 @@ export function genRoomId(): string {
     return 'room_' + Math.random().toString(36).substring(2, 10);
 }
 
-export const genMessageId = () => `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+export const genMessageId = () => `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;

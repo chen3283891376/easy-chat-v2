@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { signMessage, signRaw } from './ed25519';
 import { genNonce } from './utils';
 
@@ -13,7 +14,7 @@ export const storage = {
             throw new Error('Failed to get value from storage');
         }
     },
-    new: async (key: string, value: any, auth?: Auth) => {
+    new: async (key: string, value: unknown, auth?: Auth) => {
         const body: any = { key, value };
         if (auth) {
             const time = Math.floor(Date.now() / 1000);
@@ -31,7 +32,11 @@ export const storage = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
-        if (response.status === 401) { localStorage.clear(); location.reload(); return; }
+        if (response.status === 401) {
+            localStorage.clear();
+            location.reload();
+            return;
+        }
         if (!response.ok) throw new Error('Failed to create new variable');
     },
 
@@ -48,7 +53,11 @@ export const storage = {
             body.sig = sig;
             body.nonce = nonce;
         }
-        const response = await fetch('/api/set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const response = await fetch('/api/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
         if (!response.ok) throw new Error('Failed to set value in storage');
     },
 
@@ -67,14 +76,18 @@ export const storage = {
                 time,
                 sig,
                 nonce,
-            })
+            });
         }
-        const response = await fetch('/api/append', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload });
+        const response = await fetch('/api/append', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+        });
         if (!response.ok) throw new Error('Failed to append value in storage');
     },
-    getRooms: async (_username: string, _auth?: Auth) => { },
-    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => { },
-    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => { },
+    getRooms: async (_username: string, _auth?: Auth) => {},
+    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => {},
+    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => {},
 };
 
 // Rooms API: 获取用户保存的房间列表

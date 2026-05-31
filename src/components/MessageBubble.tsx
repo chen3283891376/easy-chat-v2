@@ -37,9 +37,13 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                         message.nonce || '',
                     );
                     if (ok) return uname;
-                } catch {}
+                } catch {
+                    /* empty */
+                }
             }
-        } catch {}
+        } catch {
+            /* empty */
+        }
         return message.username;
     };
 
@@ -80,9 +84,13 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                             setQuoteDisplayName(uname);
                             return;
                         }
-                    } catch {}
+                    } catch {
+                        /* empty */
+                    }
                 }
-            } catch {}
+            } catch {
+                /* empty */
+            }
         })();
         return () => {
             mounted = false;

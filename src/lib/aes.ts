@@ -8,10 +8,10 @@ import { randomBytes } from '@noble/hashes/utils.js';
 
 // Argon2id 安全参数
 const ARGON2_OPT = {
-    t: 3,             // iterations
-    m: 65536,         // memory (KB) -> 64MB
-    p: 4,             // parallelism
-    dkLen: 32,        // 输出32字节 = AES‑256密钥
+    t: 3, // iterations
+    m: 65536, // memory (KB) -> 64MB
+    p: 4, // parallelism
+    dkLen: 32, // 输出32字节 = AES‑256密钥
 };
 
 export function encryptPrivateKey(privateKey: string, password: string): string {

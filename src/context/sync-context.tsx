@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useUser } from './user-context';
 import { useRoom } from './room-context';
 import { useMessage } from './message-context';
@@ -18,7 +18,7 @@ export function SyncProvider() {
 
     const storageKey = `easychatv2-channel-${currentRoom.id}`;
     const lastSyncKey = `easychatv2-sync-${currentRoom.id}`;
-    const getLastSync = () => Number(localStorage.getItem(lastSyncKey) || 0);
+    const getLastSync = useCallback(() => Number(localStorage.getItem(lastSyncKey) || 0), [lastSyncKey]);
 
     useEffect(() => {
         const prepare = async () => {
@@ -49,10 +49,12 @@ export function SyncProvider() {
                     signedAppendRef.current = null;
                     localStorage.setItem(`pending-append-${storageKey}`, payload);
                 }
-            } catch {}
+            } catch {
+                /* empty */
+            }
         };
         prepare();
-    }, [storageKey, messages, user, privateKey]);
+    }, [storageKey, messages, user, privateKey, getLastSync]);
 
     useEffect(() => {
         const handler = () => {
@@ -72,12 +74,14 @@ export function SyncProvider() {
                 } else {
                     localStorage.setItem(pendingKey, data);
                 }
-            } catch {}
+            } catch {
+                /* empty */
+            }
         };
 
         window.addEventListener('visibilitychange', handler);
         return () => window.removeEventListener('visibilitychange', handler);
-    }, [storageKey]);
+    }, [getLastSync, storageKey]);
 
     useEffect(() => {
         const flush = async () => {
@@ -91,7 +95,9 @@ export function SyncProvider() {
                     body: pending,
                 });
                 if (res.ok) localStorage.removeItem(pendingKey);
-            } catch {}
+            } catch {
+                /* empty */
+            }
         };
         flush();
     }, [storageKey, user, privateKey]);
