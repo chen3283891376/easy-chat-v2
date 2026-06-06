@@ -11,6 +11,8 @@ interface RoomContextType {
     joinRoomById: (roomId: string, roomName: string) => Promise<void>;
     switchToRoom: (room: Room) => Promise<void>;
     setRoomList: (rooms: Room[]) => Promise<void>;
+    // open a direct message as a room between current user and other username
+    openDMWith: (otherUsername: string) => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -65,6 +67,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         await switchToRoom(newRoom);
     };
 
+    const openDMWith = async (otherUsername: string) => {
+        const me = user?.username || '';
+        if (!me) return;
+        const id = `dm_${[me, otherUsername].sort().join('|')}`;
+        const name = `私聊：${otherUsername}`;
+        await joinRoomById(id, name);
+    };
+
     return (
         <RoomContext.Provider
             value={{
@@ -74,6 +84,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
                 joinRoomById,
                 switchToRoom,
                 setRoomList,
+                openDMWith,
             }}
         >
             {children}

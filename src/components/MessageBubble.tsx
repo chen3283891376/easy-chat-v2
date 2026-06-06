@@ -4,6 +4,9 @@ import { useChat } from '@/context/ChatContext';
 import { formatTime } from '@/lib/time.ts';
 import { cn } from '@/lib/utils';
 import { verifyMessage } from '@/lib/ed25519';
+import { storage } from '@/lib/storage';
+import { genRoomId } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
     ContextMenu,
     ContextMenuContent,
@@ -20,7 +23,7 @@ type MessageBubbleProps = {
 };
 
 export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) => {
-    const { setQuoteMsgId, recallMessage, messages, publicKeyMap } = useChat();
+    const { setQuoteMsgId, recallMessage, messages, publicKeyMap, user, privateKey, joinRoomById } = useChat();
 
     // Resolve display name by verifying signature against known public keys.
     const resolveDisplayName = async () => {
@@ -162,6 +165,77 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                 </ContextMenuTrigger>
                                 <ContextMenuContent side="bottom">
                                     <ContextMenuGroup>
+                                        {isCurrentUser && (
+                                            <ContextMenuItem
+                                                onClick={async () => {
+                                                    if (!displayName || displayName === currentUsername) return;
+                                                    if (!user || !privateKey) {
+                                                        toast.error('请先登录以发送私聊请求');
+                                                        return;
+                                                    }
+                                                    // create an unguessable room id and send invite payload (caller may encrypt payload client-side)
+                                                    const roomId = genRoomId();
+                                                    const payload = JSON.stringify({
+                                                        roomId,
+                                                        name: `私聊：${displayName}`,
+                                                    });
+                                                    try {
+                                                        await storage.sendInvite(user.username, displayName, payload, {
+                                                            username: user.username,
+                                                            privateKey,
+                                                        });
+                                                        toast.success('私聊请求已发送，等待对方审批');
+
+                                                        (async function pollAccept(attempts = 15) {
+                                                            for (let i = 0; i < attempts; i++) {
+                                                                try {
+                                                                    const notes = await storage.getNotifications(
+                                                                        user.username,
+                                                                    );
+                                                                    const match = (notes || []).find(
+                                                                        (n: {
+                                                                            type: string;
+                                                                            from: string;
+                                                                            roomId: string;
+                                                                        }) =>
+                                                                            n.type === 'invite_accepted' &&
+                                                                            n.from === displayName,
+                                                                    ) as unknown as { roomId: string };
+                                                                    if (match) {
+                                                                        // join room locally
+                                                                        try {
+                                                                            await joinRoomById(
+                                                                                match.roomId,
+                                                                                `私聊: ${displayName}`,
+                                                                            );
+                                                                            // clear notifications
+                                                                            await storage.clearNotifications(
+                                                                                user.username,
+                                                                                {
+                                                                                    username: user.username,
+                                                                                    privateKey,
+                                                                                },
+                                                                            );
+                                                                            toast.success('对方已接受，已加入私聊房间');
+                                                                        } catch {
+                                                                            toast.error('已接受，但加入房间失败');
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                } catch {
+                                                                    /* ignore */
+                                                                }
+                                                                await new Promise(r => setTimeout(r, 2000));
+                                                            }
+                                                        })();
+                                                    } catch (err) {
+                                                        toast.error((err as Error).message || '发送邀请失败');
+                                                    }
+                                                }}
+                                            >
+                                                私聊
+                                            </ContextMenuItem>
+                                        )}
                                         <ContextMenuItem onClick={() => setQuoteMsgId(message.id)}>
                                             <QuoteIcon />
                                             引用

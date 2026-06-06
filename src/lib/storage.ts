@@ -85,9 +85,15 @@ export const storage = {
         });
         if (!response.ok) throw new Error('Failed to append value in storage');
     },
-    getRooms: async (_username: string, _auth?: Auth) => {},
-    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => {},
-    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => {},
+    getRooms: async (_username: string, _auth?: Auth) => { },
+    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => { },
+    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => { },
+
+    sendInvite: async (_username: string, _recipient: string, _encryptedPayload: string, _auth?: Auth) => { },
+    getInvites: async (_username: string, _auth?: Auth) => { },
+    respondInvite: async (_username: string, _inviter: string, _response: 'accept' | 'decline', _roomId: string | undefined, _auth?: Auth) => { },
+    getNotifications: async (_username: string, _auth?: Auth) => { return []; },
+    clearNotifications: async (_username: string, _auth?: Auth) => { },
 };
 
 // Rooms API: 获取用户保存的房间列表
@@ -139,5 +145,84 @@ storage.changeUsername = async (oldUsername: string, newUsername: string, auth?:
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.message || 'Failed to change username');
+    return data;
+};
+
+// Invite API: send encrypted invite payload to recipient
+storage.sendInvite = async (username: string, recipient: string, encryptedPayload: string, auth?: Auth) => {
+    if (!auth) throw new Error('Auth required');
+    const time = Math.floor(Date.now() / 1000);
+    const nonce = genNonce();
+    const payload = `${username}|${recipient}|${encryptedPayload}|${time}|${nonce}`;
+    const sig = await signRaw(payload, auth.privateKey);
+
+    const body = { username, recipient, payload: encryptedPayload, time, sig, nonce } as any;
+    const res = await fetch('/api/dm/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || 'Failed to send invite');
+    return data;
+};
+
+// Get invites for a user
+storage.getInvites = async (username: string, auth?: Auth) => {
+    if (!auth) throw new Error('Auth required');
+    const time = Math.floor(Date.now() / 1000);
+    const nonce = genNonce();
+    const payload = `${time}|${nonce}`;
+    const sig = await signRaw(payload, auth.privateKey);
+
+    const url = `/api/dm/invites/${encodeURIComponent(username)}?sig=${sig}&timestamp=${time}&nonce=${nonce}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to get invites');
+    const d = await res.json();
+    return d.data;
+};
+
+// Fetch notifications for DM (key: dm_notify_<username>)
+storage.getNotifications = async (username: string) => {
+    const key = `dm_notify_${username}`;
+    const res = await fetch(`/api/get?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return [];
+    const d = await res.json();
+    try {
+        return JSON.parse(d.data || '[]');
+    } catch {
+        return [];
+    }
+};
+
+// Clear notifications for user (overwrite)
+storage.clearNotifications = async (username: string, auth?: Auth) => {
+    if (!auth) throw new Error('Auth required');
+    const key = `dm_notify_${username}`;
+    await storage.set(key, JSON.stringify([]), auth);
+};
+
+// Respond to an invite (accept/decline). When accepting, include the roomId you decrypted from payload.
+storage.respondInvite = async (
+    username: string,
+    inviter: string,
+    response: 'accept' | 'decline',
+    roomId: string | undefined,
+    auth?: Auth,
+) => {
+    if (!auth) throw new Error('Auth required');
+    const time = Math.floor(Date.now() / 1000);
+    const nonce = genNonce();
+    const payload = `${username}|${inviter}|${response}|${roomId || ''}|${time}|${nonce}`;
+    const sig = await signRaw(payload, auth.privateKey);
+
+    const body = { username, inviter, response, roomId, time, sig, nonce } as any;
+    const res = await fetch('/api/dm/invite/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || 'Failed to respond invite');
     return data;
 };
