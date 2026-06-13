@@ -14,7 +14,7 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from './ui/context-menu';
-import { QuoteIcon, UndoIcon } from 'lucide-react';
+import { MessageCircleIcon, QuoteIcon, UndoIcon } from 'lucide-react';
 import type { ChatMessage } from '@/types/message';
 
 type MessageBubbleProps = {
@@ -23,7 +23,18 @@ type MessageBubbleProps = {
 };
 
 export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) => {
-    const { setQuoteMsgId, recallMessage, messages, publicKeyMap, user, privateKey, joinRoomById } = useChat();
+    const {
+        setQuoteMsgId,
+        recallMessage,
+        messages,
+        publicKeyMap,
+        user,
+        privateKey,
+        joinRoomById,
+        roomList,
+        currentRoom,
+        switchToRoom,
+    } = useChat();
 
     // Resolve display name by verifying signature against known public keys.
     const resolveDisplayName = async () => {
@@ -165,7 +176,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                 </ContextMenuTrigger>
                                 <ContextMenuContent side="bottom">
                                     <ContextMenuGroup>
-                                        {isCurrentUser && (
+                                        {!isCurrentUser && currentRoom?.name !== `私聊: ${displayName}` && (
                                             <ContextMenuItem
                                                 onClick={async () => {
                                                     if (!displayName || displayName === currentUsername) return;
@@ -173,11 +184,18 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                                         toast.error('请先登录以发送私聊请求');
                                                         return;
                                                     }
+
+                                                    if (roomList.find(r => r.name === `私聊: ${displayName}`)) {
+                                                        switchToRoom(
+                                                            roomList.find(r => r.name === `私聊: ${displayName}`)!,
+                                                        );
+                                                    }
+
                                                     // create an unguessable room id and send invite payload (caller may encrypt payload client-side)
                                                     const roomId = genRoomId();
                                                     const payload = JSON.stringify({
                                                         roomId,
-                                                        name: `私聊：${displayName}`,
+                                                        name: `私聊: ${displayName}`,
                                                     });
                                                     try {
                                                         await storage.sendInvite(user.username, displayName, payload, {
@@ -233,6 +251,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                                     }
                                                 }}
                                             >
+                                                <MessageCircleIcon />
                                                 私聊
                                             </ContextMenuItem>
                                         )}

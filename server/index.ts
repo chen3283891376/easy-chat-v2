@@ -472,9 +472,9 @@ Bun.serve({
                     try {
                         const r1 = JSON.parse(inviterData.rooms || '[]');
                         const r2 = JSON.parse(user.rooms || '[]');
-                        const roomObj = { id: roomId, name: `私聊：${username}` };
+                        const roomObj = { id: roomId, name: `私聊: ${username}` };
                         if (!r1.some((r: any) => r.id === roomId)) r1.push(roomObj);
-                        const roomObj2 = { id: roomId, name: `私聊：${inviter}` };
+                        const roomObj2 = { id: roomId, name: `私聊: ${inviter}` };
                         if (!r2.some((r: any) => r.id === roomId)) r2.push(roomObj2);
                         inviterData.rooms = JSON.stringify(r1);
                         user.rooms = JSON.stringify(r2);

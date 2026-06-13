@@ -50,7 +50,7 @@ export function Invites() {
             try {
                 const p = JSON.parse(inv.payload);
                 roomId = p.roomId;
-                roomName = `私聊：${inv.from} `;
+                roomName = `私聊: ${inv.from} `;
             } catch {
                 /* empty */
             }
@@ -59,7 +59,7 @@ export function Invites() {
             // if accepted and we have a roomId, switch to it locally
             if (resp === 'accept' && roomId) {
                 try {
-                    await joinRoomById(roomId, roomName || `私聊：${inv.from}`);
+                    await joinRoomById(roomId, roomName || `私聊: ${inv.from}`);
                     setOpen(false);
                 } catch {
                     /* ignore */
