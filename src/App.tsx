@@ -156,7 +156,7 @@ function ChatApp() {
                 <Invites />
             </div>
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col h-full">
                 <ChatMessageArea />
                 <ChatInput />
             </div>

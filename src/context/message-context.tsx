@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { connect, type IttySocket } from 'itty-sockets';
 import { storage } from '../lib/storage';
 import { signMessage, verifyMessage } from '../lib/ed25519';
@@ -6,6 +6,8 @@ import { genMessageId, genNonce } from '../lib/utils';
 import type { ChatMessage } from '@/types/message';
 import { useUser } from './user-context';
 import { useRoom } from './room-context';
+import type { IFile } from '@/hooks/useFileUpload';
+import { toast } from 'sonner';
 
 interface MessageContextType {
     messages: ChatMessage[];
@@ -17,6 +19,7 @@ interface MessageContextType {
     recallMessage: (messageId: string) => Promise<void>;
     publicKeyMap: Record<string, string>;
     syncToCloud: () => Promise<void>;
+    sendFile: (file: IFile) => Promise<void>;
 }
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -40,8 +43,8 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     const localKey = `easychatv2-local-${currentRoom.id}`;
     const lastSyncKey = `easychatv2-sync-${currentRoom.id}`;
 
-    const getLastSync = () => Number(localStorage.getItem(lastSyncKey) || 0);
-    const setLastSync = (t: number) => localStorage.setItem(lastSyncKey, String(t));
+    const getLastSync = useCallback(() => Number(localStorage.getItem(lastSyncKey) || 0), [lastSyncKey]);
+    const setLastSync = useCallback((t: number) => localStorage.setItem(lastSyncKey, String(t)), [lastSyncKey]);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -59,7 +62,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         return () => clearInterval(timer);
     }, []);
 
-    const syncToCloud = async () => {
+    const syncToCloud = useCallback(async () => {
         if (isSyncing.current || !user || !privateKey) return;
         isSyncing.current = true;
         try {
@@ -76,7 +79,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             /* empty */
         }
         isSyncing.current = false;
-    };
+    }, [getLastSync, privateKey, setLastSync, storageKey, user]);
 
     const handleSend = async () => {
         if (!user || !input.trim() || !socketRef.current || !privateKey) return;
@@ -94,7 +97,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             nonce,
             quoteId: quoteMsgId || undefined,
             publicKey: user.publicKey.slice(-16),
-            // publicKey: user.publicKey,
         };
 
         isNonceUsedLocally(nonce);
@@ -232,6 +234,41 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             });
     }, [user]);
 
+    const sendFile = useCallback(
+        async (file: IFile) => {
+            if (!user || !file) return;
+            const time = Date.now() / 1000;
+            const id = genMessageId();
+            const nonce = genNonce();
+            const sig = await signMessage(JSON.stringify(file), user.username, time, privateKey, nonce);
+            const data: ChatMessage = {
+                id,
+                username: user.username,
+                msg: JSON.stringify(file),
+                time,
+                sig,
+                nonce,
+                publicKey: user.publicKey.slice(-16),
+                type: 'share',
+            };
+            try {
+                isNonceUsedLocally(nonce);
+                socketRef.current?.send(JSON.stringify(data));
+                setMessages(prev => [...prev, data]);
+                toast.success('发送成功');
+
+                const last = getLastSync();
+                const newMsgs = messagesRef.current.filter(m => m.time > last);
+                if (newMsgs.length >= 20) await syncToCloud();
+                if (quoteMsgId) setQuoteMsgId(null);
+            } catch (e) {
+                toast.error('发送失败');
+                console.error('发送文件失败:', e);
+            }
+        },
+        [getLastSync, privateKey, quoteMsgId, syncToCloud, user],
+    );
+
     return (
         <MessageContext.Provider
             value={{
@@ -244,6 +281,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 recallMessage,
                 publicKeyMap,
                 syncToCloud,
+                sendFile,
             }}
         >
             {children}

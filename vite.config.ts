@@ -19,6 +19,11 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: path => path.replace(/^\/api/, ''),
             },
+            "/xes/api": {
+                target: "https://code.xueersi.com/api",
+                changeOrigin: true,
+                rewrite: (url) => url.replace(/^\/xes\/api/, ""),
+            },
         },
     },
 });
