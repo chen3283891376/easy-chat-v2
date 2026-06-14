@@ -97,7 +97,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         if (!user) return;
         if (socketRef.current) socketRef.current.close();
 
-        const channel = connect(`ws://localhost:3000/c/easychatv2-channel-${currentRoom.id}`, {
+        const channel = connect(`wss://chatws.chenify.top/c/easychatv2-channel-${currentRoom.id}`, {
             as: user.username,
             announce: true,
         });
