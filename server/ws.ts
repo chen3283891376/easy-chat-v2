@@ -40,7 +40,7 @@ type MessageEvent = {
     message: any;
 };
 
-// 服务端私有连接元数据：仅存于服务端内存，绝不会下发客户端
+// 服务端私有连接元数据：移除sessionMessages，不再按单用户缓存
 type ConnectionMeta = {
     uid: string;
     alias?: string;
@@ -48,11 +48,12 @@ type ConnectionMeta = {
     echo: boolean;
     announce: boolean;
     list: boolean;
-    sessionMessages: any[]; // 当前连接独立消息缓存，用于断开持久化
 };
 
-// 全局频道管理
+// 全局频道在线连接管理
 const channels = new Map<string, Set<ServerWebSocket<ConnectionMeta>>>();
+// 新增：全局频道完整消息池，存放整个聊天室所有普通聊天消息
+const channelGlobalMessages = new Map<string, any[]>();
 
 // 工具：生成唯一 uid
 function generateUID(): string {
@@ -106,6 +107,8 @@ function handleJoin(ws: ServerWebSocket<ConnectionMeta>) {
 
     if (!channels.has(channelId)) {
         channels.set(channelId, new Set());
+        // 新频道初始化全局消息数组
+        channelGlobalMessages.set(channelId, []);
     }
     channels.get(channelId)!.add(ws);
 
@@ -143,6 +146,7 @@ function handleLeave(ws: ServerWebSocket<ConnectionMeta>) {
     const sockets = channels.get(channelId);
     if (sockets) {
         sockets.delete(ws);
+        // 频道无人在线时，保留全局消息缓存不销毁，避免丢记录
         if (sockets.size === 0) {
             channels.delete(channelId);
         }
@@ -222,7 +226,6 @@ const server = serve({
         const announce = params.get("announce") !== "false";
         const list = params.get("list") !== "false";
 
-        // 挂载独立缓存 sessionMessages，仅服务端可见
         const upgraded = server.upgrade(req, {
             data: {
                 uid: generateUID(),
@@ -231,7 +234,6 @@ const server = serve({
                 echo,
                 announce,
                 list,
-                sessionMessages: [],
             } satisfies ConnectionMeta,
         });
 
@@ -247,6 +249,8 @@ const server = serve({
         message(ws, rawMessage) {
             const meta = ws.data;
             const now = Date.now();
+            const channelId = meta.channelId;
+            const globalMsgList = channelGlobalMessages.get(channelId)!;
 
             const rawStr = typeof rawMessage === "string" ? rawMessage : Buffer.from(rawMessage).toString();
             const privateData = parsePrivateMessage(rawStr);
@@ -263,8 +267,11 @@ const server = serve({
             let parsedMessage: any;
             try {
                 parsedMessage = JSON.parse(jsonStr);
-                // 存入当前连接专属缓存，仅服务端持久化使用
-                meta.sessionMessages.push(parsedMessage);
+                // 你原有判断逻辑完全保留不动
+                if (!(JSON.parse(parsedMessage).type === "message")) {
+                    // 存入频道全局消息池（替代单用户sessionMessages）
+                    globalMsgList.push(parsedMessage);
+                }
             } catch {
                 const errorEvent: ErrorEvent = {
                     type: "error",
@@ -300,12 +307,24 @@ const server = serve({
             handleLeave(ws);
             const meta = ws.data;
             const targetChannel = meta.channelId;
-            const appendMsgs = meta.sessionMessages;
+            const fullChannelMsgs = channelGlobalMessages.get(targetChannel) ?? [];
+            const appendList = [];
+            for (const i in fullChannelMsgs) {
+                appendList.push(JSON.parse(fullChannelMsgs[i]));
+            }
 
             await db.read();
-            const history = JSON.parse(db.data.variables[targetChannel] || "[]");
-            const merged = [...history, ...appendMsgs];
-            db.data.variables[targetChannel] = JSON.stringify(merged);
+            const historyRaw = db.data.variables[targetChannel] || "[]";
+            const history = JSON.parse(historyRaw);
+
+            const allRaw = [...history, ...appendList];
+            const uniqueMap = new Map<string, any>();
+            for (const msg of allRaw) {
+                if (msg?.id) uniqueMap.set(msg.id, msg);
+            }
+            const uniqueMessages = Array.from(uniqueMap.values());
+
+            db.data.variables[targetChannel] = JSON.stringify(uniqueMessages);
             await db.write();
         },
     },
