@@ -141,7 +141,10 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
             (async function pollAccept(attempts = 15) {
                 for (let i = 0; i < attempts; i++) {
                     try {
-                        const notes = await storage.getNotifications(user.username);
+                        const notes = await storage.getNotifications(user.username, {
+                            username: user.username,
+                            privateKey,
+                        });
                         const match = (notes || []).find(
                             (n: { type: string; from: string; roomId: string }) =>
                                 n.type === 'invite_accepted' && n.from === displayName,

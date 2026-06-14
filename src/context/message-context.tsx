@@ -108,7 +108,10 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 const local = JSON.parse(localStorage.getItem(localKey) || '[]');
                 let cloud: ChatMessage[] = [];
                 try {
-                    const data = await storage.get(storageKey);
+                    const data = await storage.get(storageKey, {
+                        username: user.username,
+                        privateKey,
+                    });
                     cloud = JSON.parse(data || '[]');
                 } catch {
                     await storage.new(storageKey, '[]', { username: user.username, privateKey });
