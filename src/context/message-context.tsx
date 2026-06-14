@@ -97,7 +97,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         if (!user) return;
         if (socketRef.current) socketRef.current.close();
 
-        const channel = connect(`wss://chatws.chenify.top/c/easychatv2-channel-${currentRoom.id}`, {
+        const channel = connect(`ws://localhost:3000/c/easychatv2-channel-${currentRoom.id}`, {
             as: user.username,
             announce: true,
         });
@@ -108,7 +108,10 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 const local = JSON.parse(localStorage.getItem(localKey) || '[]');
                 let cloud: ChatMessage[] = [];
                 try {
-                    const data = await storage.get(storageKey);
+                    const data = await storage.get(storageKey, {
+                        username: user.username,
+                        privateKey,
+                    });
                     cloud = JSON.parse(data || '[]');
                 } catch {
                     await storage.new(storageKey, '[]', { username: user.username, privateKey });

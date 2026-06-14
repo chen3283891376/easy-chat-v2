@@ -63,6 +63,23 @@ export const varRoutes = {
     "/get": {
         GET: withDebugLog(async (req) => {
             const key = new URL(req.url).searchParams.get("key");
+            const username = new URL(req.url).searchParams.get("username");
+            if (!username) return Response.json({ status: "error", message: "缺少用户名", data: [] }, { status: 400 });
+            const time = new URL(req.url).searchParams.get("time");
+            const sig = new URL(req.url).searchParams.get("sig");
+            const nonce = new URL(req.url).searchParams.get("nonce");
+            if (!time || !sig || !nonce) return Response.json({ status: "error", message: "缺少签名认证", data: [] }, { status: 401 });
+
+            const user = db.data.user_data[username];
+            if (!user) return Response.json({ status: "error", message: "无此用户", data: [] }, { status: 401 });
+            if (usedNonce.has(nonce)) return Response.json({ status: "error", message: "请求重复或已过期", data: [] }, { status: 400 });
+            if (!checkTimeWindow(time))
+                return Response.json({ status: "error", message: "签名时间不在允许范围", data: [] }, { status: 400 });
+            const payload = `${key}|${time}|${nonce}`;
+            const ok = await ed.verifyAsync(fromHex(sig), new TextEncoder().encode(payload), fromHex(user.publicKey));
+            if (!ok) return Response.json({ status: "error", message: "签名验证失败", data: [] }, { status: 401 });
+            usedNonce.add(nonce);
+
             await db.read();
             if (!key || !db.data.variables[key]) {
                 return Response.json({ status: "error", message: "云变量未找到", data: [] }, { status: 404 });

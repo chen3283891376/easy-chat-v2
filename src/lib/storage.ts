@@ -1,12 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { signMessage, signRaw } from './ed25519';
+import { fromHex, signMessage, signRaw, toHex } from './ed25519';
+import * as ed from '@noble/ed25519';
 import { genNonce } from './utils';
 
 type Auth = { username: string; privateKey: string } | undefined;
 
 export const storage = {
-    get: async (key: string) => {
-        const response = await fetch(`/api/get?key=${key}`);
+    get: async (key: string, auth?: Auth) => {
+        if (!auth) throw new Error('Auth required');
+        const time = Math.floor(Date.now() / 1000);
+        const nonce = genNonce();
+        const msg = `${key}|${time}|${nonce}`;
+        const sig = await ed.signAsync(new TextEncoder().encode(msg), fromHex(auth.privateKey));
+        const response = await fetch(`/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`);
+        if (response.status === 401) {
+            localStorage.clear();
+            location.reload();
+            return;
+        }
         if (response.ok) {
             const data = await response.json();
             return data.data;
@@ -183,9 +194,14 @@ storage.getInvites = async (username: string, auth?: Auth) => {
 };
 
 // Fetch notifications for DM (key: dm_notify_<username>)
-storage.getNotifications = async (username: string) => {
+storage.getNotifications = async (username: string, auth?: Auth) => {
+    if (!auth) throw new Error('Auth required');
     const key = `dm_notify_${username}`;
-    const res = await fetch(`/api/get?key=${encodeURIComponent(key)}`);
+    const time = Math.floor(Date.now() / 1000);
+    const nonce = genNonce();
+    const msg = `${key}|${time}|${nonce}`;
+    const sig = await ed.signAsync(new TextEncoder().encode(msg), fromHex(auth.privateKey));
+    const res = await fetch(`/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`);
     if (!res.ok) return [];
     const d = await res.json();
     try {
