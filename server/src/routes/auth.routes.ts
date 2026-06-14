@@ -6,12 +6,13 @@ import * as ed from "@noble/ed25519";
 export const authRoutes = {
     "/auth/register": {
         POST: withDebugLog(async (req) => {
-            const { username, publicKey, encryptedPrivate } = (await req.json()) as {
+            const { username, publicKey, encryptedPrivate, avatarUrl } = (await req.json()) as {
                 username: string;
                 publicKey: string;
                 encryptedPrivate: string;
+                avatarUrl: string;
             };
-            if (!username || !publicKey)
+            if (!username || !publicKey || !avatarUrl)
                 return Response.json({ status: "error", message: "参数不全" }, { status: 400 });
             if (username.includes("|"))
                 return Response.json({ status: "error", message: "用户名不能包含 | 字符" }, { status: 400 });
@@ -21,6 +22,7 @@ export const authRoutes = {
                 publicKey,
                 encryptedPrivate,
                 rooms: '[{"id":"room_default","name":"默认房间"}]',
+                avatarUrl,
             };
             await db.write();
             return Response.json({ status: "success", message: "注册完成" }, { status: 200 });
@@ -48,6 +50,15 @@ export const authRoutes = {
             const result: Record<string, string> = {};
             for (const uname in db.data.user_data) {
                 if (db.data.user_data[uname]?.publicKey) result[uname] = db.data.user_data[uname].publicKey;
+            }
+            return Response.json({ status: "success", data: result });
+        }),
+    },
+    "/user/avatars": {
+        GET: withDebugLog(() => {
+            const result: Record<string, string> = {};
+            for (const uname in db.data.user_data) {
+                if (db.data.user_data[uname]?.avatarUrl) result[uname] = db.data.user_data[uname].avatarUrl;
             }
             return Response.json({ status: "success", data: result });
         }),

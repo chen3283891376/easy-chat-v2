@@ -18,6 +18,7 @@ interface MessageContextType {
     setQuoteMsgId: (id: string | null) => void;
     recallMessage: (messageId: string) => Promise<void>;
     publicKeyMap: Record<string, string>;
+    avatarKeyMap: Record<string, string>;
     sendFile: (file: IFile) => Promise<void>;
 }
 
@@ -31,6 +32,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     const [input, setInputState] = useState('');
     const [quoteMsgId, setQuoteMsgId] = useState<string | null>(null);
     const [publicKeyMap, setPublicKeyMap] = useState<Record<string, string>>({});
+    const [avatarKeyMap, setAvatarKeyMap] = useState<Record<string, string>>({});
 
     const socketRef = useRef<IttySocket | null>(null);
     const messagesRef = useRef<ChatMessage[]>([]);
@@ -207,6 +209,11 @@ export function MessageProvider({ children }: { children: ReactNode }) {
             .then(d => {
                 if (d.status === 'success') setPublicKeyMap(d.data);
             });
+        fetch('/api/user/avatars')
+            .then(res => res.json())
+            .then(d => {
+                if (d.status === 'success') setAvatarKeyMap(d.data);
+            });
     }, [user]);
 
     const sendFile = useCallback(
@@ -252,6 +259,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 setQuoteMsgId,
                 recallMessage,
                 publicKeyMap,
+                avatarKeyMap,
                 sendFile,
             }}
         >

@@ -9,6 +9,7 @@ export type DBData = {
             publicKey: string;
             encryptedPrivate: string;
             rooms: string;
+            avatarUrl: string;
         }
     >;
     private_messages: Record<string, string>;

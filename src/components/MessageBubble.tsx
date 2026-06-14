@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AvatarGroupCount } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useChat } from '@/context/ChatContext';
 import { formatTime } from '@/lib/time.ts';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
         recallMessage,
         messages,
         publicKeyMap,
+        avatarKeyMap,
         user,
         privateKey,
         joinRoomById,
@@ -39,7 +40,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
     } = useChat();
 
     // Resolve display name by verifying signature against known public keys.
-    const resolveDisplayName = async () => {
+    const resolveDisplayName = React.useCallback(async () => {
         if (!message.sig) return message.username;
         try {
             for (const [uname, pub] of Object.entries(publicKeyMap || {})) {
@@ -61,7 +62,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
             /* empty */
         }
         return message.username;
-    };
+    }, [message.msg, message.nonce, message.sig, message.time, message.username, publicKeyMap]);
 
     const [displayName, setDisplayName] = React.useState<string>(message.username);
 
@@ -74,8 +75,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
         return () => {
             mounted = false;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [message.username, message.msg, message.sig, message.time, JSON.stringify(publicKeyMap)]);
+    }, [message.username, message.msg, message.sig, message.time, resolveDisplayName]);
 
     const isCurrentUser = displayName === currentUsername;
     const quoteMessage = message.quoteId ? messages.find(m => m.id === message.quoteId) : null;
@@ -211,9 +211,12 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
     return (
         <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4`}>
             <div className={`max-w-[70%] flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''}`}>
-                <AvatarGroupCount>
-                    {displayName ? displayName[0] : message.username ? message.username[0] : '?'}
-                </AvatarGroupCount>
+                <Avatar>
+                    <AvatarImage src={avatarKeyMap[displayName]} alt={displayName} />
+                    <AvatarFallback>
+                        {displayName ? displayName[0] : message.username ? message.username[0] : '?'}
+                    </AvatarFallback>
+                </Avatar>
                 <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-2`}>
                     <div
                         className={`flex flex-col max-w-xs sm:max-w-sm lg:max-w-md ${
@@ -272,14 +275,6 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                                 </div>
                                             </div>
                                         )}
-                                        {/* <p
-                                            className={cn(
-                                                'text-sm wrap-break-word whitespace-pre-wrap',
-                                                message.recalled && 'text-secondary-foreground italic',
-                                            )}
-                                        >
-                                            {message.recalled ? '消息已撤回' : message.msg}
-                                        </p> */}
                                         {message.type !== 'share' ? (
                                             <p className="text-sm wrap-break-word whitespace-pre-wrap">
                                                 {message.recalled ? '消息已撤回' : message.msg}
