@@ -8,6 +8,7 @@ export interface ChatMessage {
     nonce?: string;
     quoteId?: string;
     recalled?: boolean;
+    type?: "name" | "share";
 }
 
 export interface User {

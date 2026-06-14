@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AvatarGroupCount } from '@/components/ui/avatar';
 import { useChat } from '@/context/ChatContext';
 import { formatTime } from '@/lib/time.ts';
 import { cn } from '@/lib/utils';
 import { verifyMessage } from '@/lib/ed25519';
+import { storage } from '@/lib/storage';
+import { genRoomId } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
     ContextMenu,
     ContextMenuContent,
@@ -11,8 +14,10 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from './ui/context-menu';
-import { QuoteIcon, UndoIcon } from 'lucide-react';
+import { DownloadIcon, MessageCircleIcon, QuoteIcon, UndoIcon } from 'lucide-react';
 import type { ChatMessage } from '@/types/message';
+import type { IFile } from '@/hooks/useFileUpload';
+import { FileDisplay } from './FileDisplay';
 
 type MessageBubbleProps = {
     message: ChatMessage;
@@ -20,7 +25,18 @@ type MessageBubbleProps = {
 };
 
 export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) => {
-    const { setQuoteMsgId, recallMessage, messages, publicKeyMap } = useChat();
+    const {
+        setQuoteMsgId,
+        recallMessage,
+        messages,
+        publicKeyMap,
+        user,
+        privateKey,
+        joinRoomById,
+        roomList,
+        currentRoom,
+        switchToRoom,
+    } = useChat();
 
     // Resolve display name by verifying signature against known public keys.
     const resolveDisplayName = async () => {
@@ -98,6 +114,100 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quoteMessage?.id, JSON.stringify(publicKeyMap)]);
 
+    const onClickInvite = async () => {
+        if (!displayName || displayName === currentUsername) return;
+        if (!user || !privateKey) {
+            toast.error('请先登录以发送私聊请求');
+            return;
+        }
+
+        if (roomList.find(r => r.name === `私聊: ${displayName}`)) {
+            switchToRoom(roomList.find(r => r.name === `私聊: ${displayName}`)!);
+        }
+
+        // create an unguessable room id and send invite payload (caller may encrypt payload client-side)
+        const roomId = genRoomId();
+        const payload = JSON.stringify({
+            roomId,
+            name: `私聊: ${displayName}`,
+        });
+        try {
+            await storage.sendInvite(user.username, displayName, payload, {
+                username: user.username,
+                privateKey,
+            });
+            toast.success('私聊请求已发送，等待对方审批');
+
+            (async function pollAccept(attempts = 15) {
+                for (let i = 0; i < attempts; i++) {
+                    try {
+                        const notes = await storage.getNotifications(user.username);
+                        const match = (notes || []).find(
+                            (n: { type: string; from: string; roomId: string }) =>
+                                n.type === 'invite_accepted' && n.from === displayName,
+                        ) as unknown as { roomId: string };
+                        if (match) {
+                            // join room locally
+                            try {
+                                await joinRoomById(match.roomId, `私聊: ${displayName}`);
+                                // clear notifications
+                                await storage.clearNotifications(user.username, {
+                                    username: user.username,
+                                    privateKey,
+                                });
+                                toast.success('对方已接受，已加入私聊房间');
+                            } catch {
+                                toast.error('已接受，但加入房间失败');
+                            }
+                            return;
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            })();
+        } catch (err) {
+            toast.error((err as Error).message || '发送邀请失败');
+        }
+    };
+
+    const { fileData, isMedia } = useMemo(() => {
+        if (message.type === 'share') {
+            try {
+                const parsedData = JSON.parse(message.msg);
+                if (parsedData && typeof parsedData === 'object' && 'name' in parsedData) {
+                    const data = parsedData as IFile;
+                    const mediaExtensions = [
+                        'jpg',
+                        'jpeg',
+                        'png',
+                        'gif',
+                        'webp',
+                        'svg',
+                        'bmp',
+                        'mp4',
+                        'webm',
+                        'mov',
+                        'avi',
+                    ];
+                    const ext = data.name.split('.').pop();
+                    const media = ext !== undefined && mediaExtensions.includes(ext.toLowerCase());
+                    return { fileData: data, isMedia: media };
+                }
+            } catch {
+                /* empty */
+            }
+        }
+        return { fileData: null, isMedia: false };
+    }, [message.type, message.msg]);
+
+    const downloadUrl = useMemo(() => {
+        return fileData && fileData.link && fileData.link.includes('python_assets/')
+            ? `https://livefile.xesimg.com/programme/python_assets/844958913c304c040803a9d7f79f898e.html?name= ${fileData.name}&file=${fileData.link.split('python_assets/')[1]}`
+            : '';
+    }, [fileData]);
+
     return (
         <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4`}>
             <div className={`max-w-[70%] flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''}`}>
@@ -120,11 +230,14 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                     <div
                                         className={
                                             !message.recalled
-                                                ? `rounded-2xl px-4 py-2 shadow-sm ${
-                                                      isCurrentUser
-                                                          ? 'bg-primary text-(--color-background) rounded-br-none'
-                                                          : 'bg-surface border border-border text-text-primary rounded-bl-none'
-                                                  }`
+                                                ? cn(
+                                                      'rounded-2xl shadow-sm',
+                                                      isMedia
+                                                          ? 'bg-transparent p-0 rounded-none shadow-none'
+                                                          : isCurrentUser
+                                                            ? 'bg-primary text-background rounded-br-none px-4 py-2'
+                                                            : 'bg-surface border border-border text-text-primary rounded-bl-none px-4 py-2',
+                                                  )
                                                 : ''
                                         }
                                     >
@@ -146,22 +259,62 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                                         quoteMessage?.recalled && 'text-secondary italic',
                                                     )}
                                                 >
-                                                    {quoteMessage?.recalled ? '消息已撤回' : quoteMessage?.msg}
+                                                    {quoteMessage?.recalled ? (
+                                                        '消息已撤回'
+                                                    ) : quoteMessage?.type !== 'share' ? (
+                                                        quoteMessage?.msg
+                                                    ) : (
+                                                        <FileDisplay
+                                                            fileData={JSON.parse(quoteMessage.msg) as IFile}
+                                                            isCurrentUser={isCurrentUser}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
-                                        <p
+                                        {/* <p
                                             className={cn(
                                                 'text-sm wrap-break-word whitespace-pre-wrap',
                                                 message.recalled && 'text-secondary-foreground italic',
                                             )}
                                         >
                                             {message.recalled ? '消息已撤回' : message.msg}
-                                        </p>
+                                        </p> */}
+                                        {message.type !== 'share' ? (
+                                            <p className="text-sm wrap-break-word whitespace-pre-wrap">
+                                                {message.recalled ? '消息已撤回' : message.msg}
+                                            </p>
+                                        ) : (
+                                            fileData &&
+                                            !message.recalled && (
+                                                <FileDisplay fileData={fileData} isCurrentUser={isCurrentUser} />
+                                            )
+                                        )}
                                     </div>
                                 </ContextMenuTrigger>
                                 <ContextMenuContent side="bottom">
                                     <ContextMenuGroup>
+                                        {!isCurrentUser && currentRoom?.name !== `私聊: ${displayName}` && (
+                                            <ContextMenuItem onClick={onClickInvite}>
+                                                <MessageCircleIcon />
+                                                私聊
+                                            </ContextMenuItem>
+                                        )}
+                                        {message.type === 'share' && downloadUrl !== '' && (
+                                            <ContextMenuItem
+                                                onClick={() => {
+                                                    if (downloadUrl !== '') {
+                                                        const newWindow = window.open(downloadUrl, '_blank');
+                                                        if (!newWindow) {
+                                                            toast.error('弹窗被拦截，请允许浏览器弹窗后重试');
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                <DownloadIcon />
+                                                下载
+                                            </ContextMenuItem>
+                                        )}
                                         <ContextMenuItem onClick={() => setQuoteMsgId(message.id)}>
                                             <QuoteIcon />
                                             引用

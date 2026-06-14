@@ -16,6 +16,7 @@ import {
     DialogClose,
 } from './components/ui/dialog';
 import { Button } from './components/ui/button';
+import { Invites } from './components/Invites';
 import { Input } from './components/ui/input';
 import { toast } from 'sonner';
 import { CheckIcon, EditIcon, LogOutIcon, XIcon } from 'lucide-react';
@@ -152,9 +153,10 @@ function ChatApp() {
                         </div>
                     )}
                 </div>
+                <Invites />
             </div>
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col h-full">
                 <ChatMessageArea />
                 <ChatInput />
             </div>

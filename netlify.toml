@@ -8,3 +8,10 @@
   status = 200
   force = true
   headers = { "Host" = "chenify.pythonanywhere.com", "Access-Control-Allow-Origin" = "*", "Access-Control-Allow-Methods" = "GET, POST, PUT, DELETE, OPTIONS", "Access-Control-Allow-Headers" = "Content-Type, Authorization" }
+
+[[redirects]]
+  from = "/xes/api/*"
+  to = "https://code.xueersi.com/api/:splat"
+  status = 200
+  force = true
+  headers = { "Host" = "code.xueersi.com", "Access-Control-Allow-Origin" = "*", "Access-Control-Allow-Methods" = "GET, POST, PUT, DELETE, OPTIONS", "Access-Control-Allow-Headers" = "Content-Type, Authorization" }
