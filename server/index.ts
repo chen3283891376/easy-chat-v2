@@ -153,54 +153,13 @@ Bun.serve({
         },
 
         "/get": {
-            GET: withDebugLog((req) => {
+            GET: withDebugLog(async (req) => {
                 const key = new URL(req.url).searchParams.get("key");
+                await db.read();
                 if (!key || !db.data.variables[key]) {
                     return Response.json({ status: "error", message: "云变量未找到", data: [] }, { status: 404 });
                 }
                 return Response.json({ status: "success", message: "操作成功", data: db.data.variables[key] });
-            }),
-        },
-
-        "/append": {
-            POST: withDebugLog(async (req) => {
-                const { key, value, username, time, sig, nonce } = (await req.json()) as Data;
-
-                if (!nonce || usedNonce.has(nonce)) {
-                    return Response.json({ status: "error", message: "请求重复或已过期" }, { status: 400 });
-                }
-
-                if (!db.data.variables[key]) {
-                    return Response.json({ status: "error", message: "云变量不存在", data: [] }, { status: 404 });
-                }
-                if (!username || !time || !sig)
-                    return Response.json({ status: "error", message: "缺少签名认证" }, { status: 401 });
-                const user = db.data.user_data[username];
-                if (!user) return Response.json({ status: "error", message: "无此用户" }, { status: 401 });
-                const now = Math.floor(Date.now() / 1000);
-                if (Math.abs(now - time) > 10)
-                    return Response.json({ status: "error", message: "签名时间不在允许范围" }, { status: 400 });
-
-                const payload = `${username}|${key}|${value}|${time}|${nonce}`;
-                const ok = await ed.verifyAsync(
-                    fromHex(sig),
-                    new TextEncoder().encode(payload),
-                    fromHex(user.publicKey),
-                );
-                if (!ok) return Response.json({ status: "error", message: "签名验证失败" }, { status: 401 });
-
-                usedNonce.add(nonce);
-
-                try {
-                    const current = JSON.parse(db.data.variables[key] || "[]");
-                    const append = JSON.parse(value || "[]");
-                    const merged = [...current, ...append];
-                    db.data.variables[key] = JSON.stringify(merged);
-                    await db.write();
-                    return Response.json({ status: "success", message: "增量追加完成" });
-                } catch {
-                    return Response.json({ status: "error", message: "数据格式错误" }, { status: 400 });
-                }
             }),
         },
 

@@ -18,7 +18,6 @@ interface MessageContextType {
     setQuoteMsgId: (id: string | null) => void;
     recallMessage: (messageId: string) => Promise<void>;
     publicKeyMap: Record<string, string>;
-    syncToCloud: () => Promise<void>;
     sendFile: (file: IFile) => Promise<void>;
 }
 
@@ -35,16 +34,11 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
     const socketRef = useRef<IttySocket | null>(null);
     const messagesRef = useRef<ChatMessage[]>([]);
-    const isSyncing = useRef(false);
     const localNonceSet = useRef<Set<string>>(new Set());
     const NONCE_EXPIRE_SECONDS = 60;
 
     const storageKey = `easychatv2-channel-${currentRoom.id}`;
     const localKey = `easychatv2-local-${currentRoom.id}`;
-    const lastSyncKey = `easychatv2-sync-${currentRoom.id}`;
-
-    const getLastSync = useCallback(() => Number(localStorage.getItem(lastSyncKey) || 0), [lastSyncKey]);
-    const setLastSync = useCallback((t: number) => localStorage.setItem(lastSyncKey, String(t)), [lastSyncKey]);
 
     useEffect(() => {
         messagesRef.current = messages;
@@ -61,25 +55,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         const timer = setInterval(() => localNonceSet.current.clear(), NONCE_EXPIRE_SECONDS * 1000);
         return () => clearInterval(timer);
     }, []);
-
-    const syncToCloud = useCallback(async () => {
-        if (isSyncing.current || !user || !privateKey) return;
-        isSyncing.current = true;
-        try {
-            const last = getLastSync();
-            const newMsgs = messagesRef.current.filter(m => m.time > last);
-            if (newMsgs.length === 0) return;
-            await storage.append(storageKey, JSON.stringify(newMsgs), {
-                username: user.username,
-                privateKey,
-            });
-            const maxTime = Math.max(...newMsgs.map(m => m.time));
-            setLastSync(maxTime);
-        } catch {
-            /* empty */
-        }
-        isSyncing.current = false;
-    }, [getLastSync, privateKey, setLastSync, storageKey, user]);
 
     const handleSend = async () => {
         if (!user || !input.trim() || !socketRef.current || !privateKey) return;
@@ -104,9 +79,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         setMessages(prev => [...prev, data]);
         setInputState('');
 
-        const last = getLastSync();
-        const newMsgs = messagesRef.current.filter(m => m.time > last);
-        if (newMsgs.length >= 20) await syncToCloud();
         if (quoteMsgId) setQuoteMsgId(null);
     };
 
@@ -123,7 +95,10 @@ export function MessageProvider({ children }: { children: ReactNode }) {
         if (!user) return;
         if (socketRef.current) socketRef.current.close();
 
-        const channel = connect(`easy-chat-v2-${currentRoom.id}`, { as: user.username, announce: true });
+        const channel = connect(`ws://localhost:3000/c/easychatv2-channel-${currentRoom.id}`, {
+            as: user.username,
+            announce: true,
+        });
         socketRef.current = channel;
 
         channel.on('open', async () => {
@@ -257,16 +232,13 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 setMessages(prev => [...prev, data]);
                 toast.success('发送成功');
 
-                const last = getLastSync();
-                const newMsgs = messagesRef.current.filter(m => m.time > last);
-                if (newMsgs.length >= 20) await syncToCloud();
                 if (quoteMsgId) setQuoteMsgId(null);
             } catch (e) {
                 toast.error('发送失败');
                 console.error('发送文件失败:', e);
             }
         },
-        [getLastSync, privateKey, quoteMsgId, syncToCloud, user],
+        [privateKey, quoteMsgId, user],
     );
 
     return (
@@ -280,7 +252,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
                 setQuoteMsgId,
                 recallMessage,
                 publicKeyMap,
-                syncToCloud,
                 sendFile,
             }}
         >
