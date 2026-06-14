@@ -9,7 +9,8 @@
         "lint": "eslint .",
         "preview": "vite preview",
         "format": "prettier --write .",
-        "serve": "cd server && bun run dev"
+        "serve": "cd server && bun run dev",
+        "ws": "cd server && bun ./ws.ts"
     },
     "dependencies": {
         "@fontsource-variable/geist": "^5.2.8",

@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from './ui/field';
+import { Progress } from './ui/progress';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface AuthModalProps {
     onLoginSuccess: (user: { username: string; publicKey: string }, privateKey: string) => void;
@@ -15,8 +17,11 @@ interface AuthModalProps {
 export function AuthModal({ onLoginSuccess }: AuthModalProps) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [avatar, setAvatar] = useState<string>('');
     const [isRegister, setIsRegister] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const { upload, cancel, isUploading, uploadProgress } = useFileUpload();
 
     useEffect(() => {
         const localUser = localStorage.getItem('chat-user');
@@ -74,6 +79,7 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                     username,
                     publicKey: publicHex,
                     encryptedPrivate,
+                    avatarUrl: avatar,
                 }),
             });
 
@@ -144,6 +150,31 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
         setLoading(false);
     };
 
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            setErrorMessage('请上传图片文件');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setErrorMessage('图片大小不能超过 5MB');
+            return;
+        }
+
+        setErrorMessage(null);
+
+        try {
+            const fileData = await upload(file);
+            setAvatar(fileData.link);
+        } catch (error) {
+            console.error('上传失败:', error);
+            setErrorMessage('头像上传失败，请稍后重试');
+        }
+    };
+
     return (
         <Dialog open={true} modal={true}>
             <DialogContent className="sm:max-w-100">
@@ -180,6 +211,38 @@ export function AuthModal({ onLoginSuccess }: AuthModalProps) {
                             />
                             <FieldError>{passwordError}</FieldError>
                         </Field>
+
+                        {isRegister && (
+                            <Field data-invalid={!!errorMessage}>
+                                <FieldLabel>头像</FieldLabel>
+                                <div className="flex items-center gap-4">
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleAvatarUpload}
+                                        className="flex-1"
+                                        disabled={isUploading}
+                                    />
+                                    {avatar && !isUploading && (
+                                        <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-300">
+                                            <img src={avatar} alt="预览" className="w-full h-full object-cover" />
+                                        </div>
+                                    )}
+                                </div>
+                                {isUploading && (
+                                    <div className="mt-2">
+                                        <div className="flex items-center gap-2">
+                                            <Progress value={uploadProgress} className="flex-1 h-2" />
+                                            <span className="text-xs font-medium">{uploadProgress}%</span>
+                                            <Button size="icon-sm" variant="ghost" onClick={cancel}>
+                                                取消
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                                <FieldError>{errorMessage}</FieldError>
+                            </Field>
+                        )}
 
                         <Button
                             className="w-full"
