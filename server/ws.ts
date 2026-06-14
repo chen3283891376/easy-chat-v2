@@ -326,6 +326,8 @@ const server = serve({
 
             db.data.variables[targetChannel] = JSON.stringify(uniqueMessages);
             await db.write();
+            // 清空全局消息池，避免内存泄漏
+            channelGlobalMessages.set(targetChannel, []);
         },
     },
 });
