@@ -138,38 +138,7 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
             });
             toast.success('私聊请求已发送，等待对方审批');
 
-            (async function pollAccept(attempts = 15) {
-                for (let i = 0; i < attempts; i++) {
-                    try {
-                        const notes = await storage.getNotifications(user.username, {
-                            username: user.username,
-                            privateKey,
-                        });
-                        const match = (notes || []).find(
-                            (n: { type: string; from: string; roomId: string }) =>
-                                n.type === 'invite_accepted' && n.from === displayName,
-                        ) as unknown as { roomId: string };
-                        if (match) {
-                            // join room locally
-                            try {
-                                await joinRoomById(match.roomId, `私聊: ${displayName}`);
-                                // clear notifications
-                                await storage.clearNotifications(user.username, {
-                                    username: user.username,
-                                    privateKey,
-                                });
-                                toast.success('对方已接受，已加入私聊房间');
-                            } catch {
-                                toast.error('已接受，但加入房间失败');
-                            }
-                            return;
-                        }
-                    } catch {
-                        /* ignore */
-                    }
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            })();
+            await joinRoomById(roomId, `私聊: ${displayName}`);
         } catch (err) {
             toast.error((err as Error).message || '发送邀请失败');
         }

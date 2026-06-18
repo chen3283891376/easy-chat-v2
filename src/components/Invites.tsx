@@ -9,6 +9,7 @@ import {
     DialogClose,
 } from './ui/dialog';
 import { Button } from './ui/button';
+import { useMessage } from '@/context/message-context';
 import { useUser } from '@/context/user-context';
 import { useRoom } from '@/context/room-context';
 import { storage } from '@/lib/storage';
@@ -16,6 +17,8 @@ import { toast } from 'sonner';
 
 export function Invites() {
     const { user, privateKey } = useUser();
+    const { joinRoomById } = useRoom();
+    const { handleSend, setInput } = useMessage();
     const [open, setOpen] = React.useState(false);
     const [invites, setInvites] = React.useState<{ from: string; payload: string; time: number }[]>([]);
     const auth = useMemo(
@@ -39,8 +42,6 @@ export function Invites() {
         }
     }, [load, open, user]);
 
-    const { joinRoomById } = useRoom();
-
     const handleRespond = async (inv: { from: string; payload: string }, resp: 'accept' | 'decline') => {
         if (!user || !auth) return;
         try {
@@ -50,7 +51,7 @@ export function Invites() {
             try {
                 const p = JSON.parse(inv.payload);
                 roomId = p.roomId;
-                roomName = `私聊: ${inv.from} `;
+                roomName = `私聊: ${inv.from}`;
             } catch {
                 /* empty */
             }
@@ -61,6 +62,10 @@ export function Invites() {
                 try {
                     await joinRoomById(roomId, roomName || `私聊: ${inv.from}`);
                     setOpen(false);
+                    queueMicrotask(() => {
+                        setInput('我们已成功添加为好友，现在可以开始聊天啦~');
+                        handleSend();
+                    });
                 } catch {
                     /* ignore */
                 }
