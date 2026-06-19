@@ -12,7 +12,9 @@ export const storage = {
         const nonce = genNonce();
         const msg = `${key}|${time}|${nonce}`;
         const sig = await ed.signAsync(new TextEncoder().encode(msg), fromHex(auth.privateKey));
-        const response = await fetch(`/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`);
+        const response = await fetch(
+            `/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`,
+        );
         if (response.status === 401) {
             localStorage.clear();
             location.reload();
@@ -96,15 +98,23 @@ export const storage = {
         });
         if (!response.ok) throw new Error('Failed to append value in storage');
     },
-    getRooms: async (_username: string, _auth?: Auth) => { },
-    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => { },
-    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => { },
+    getRooms: async (_username: string, _auth?: Auth) => {},
+    setRooms: async (_username: string, _newRooms: string, _auth?: Auth) => {},
+    changeUsername: async (_oldUsername: string, _newUsername: string, _auth?: Auth) => {},
 
-    sendInvite: async (_username: string, _recipient: string, _encryptedPayload: string, _auth?: Auth) => { },
-    getInvites: async (_username: string, _auth?: Auth) => { },
-    respondInvite: async (_username: string, _inviter: string, _response: 'accept' | 'decline', _roomId: string | undefined, _auth?: Auth) => { },
-    getNotifications: async (_username: string, _auth?: Auth) => { return []; },
-    clearNotifications: async (_username: string, _auth?: Auth) => { },
+    sendInvite: async (_username: string, _recipient: string, _encryptedPayload: string, _auth?: Auth) => {},
+    getInvites: async (_username: string, _auth?: Auth) => {},
+    respondInvite: async (
+        _username: string,
+        _inviter: string,
+        _response: 'accept' | 'decline',
+        _roomId: string | undefined,
+        _auth?: Auth,
+    ) => {},
+    getNotifications: async (_username: string, _auth?: Auth) => {
+        return [];
+    },
+    clearNotifications: async (_username: string, _auth?: Auth) => {},
 };
 
 // Rooms API: 获取用户保存的房间列表
@@ -201,7 +211,9 @@ storage.getNotifications = async (username: string, auth?: Auth) => {
     const nonce = genNonce();
     const msg = `${key}|${time}|${nonce}`;
     const sig = await ed.signAsync(new TextEncoder().encode(msg), fromHex(auth.privateKey));
-    const res = await fetch(`/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`);
+    const res = await fetch(
+        `/api/get?key=${key}&username=${auth.username}&time=${time}&sig=${toHex(sig)}&nonce=${nonce}`,
+    );
     if (!res.ok) return [];
     const d = await res.json();
     try {

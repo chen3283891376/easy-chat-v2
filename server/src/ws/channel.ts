@@ -20,7 +20,7 @@ export function broadcast(
     channelId: string,
     data: any,
     exclude?: ServerWebSocket<ConnectionMeta>,
-    only?: ServerWebSocket<ConnectionMeta>
+    only?: ServerWebSocket<ConnectionMeta>,
 ) {
     const sockets = channels.get(channelId);
     if (!sockets) return;
@@ -37,14 +37,14 @@ export function getChannelUsers(channelId: string): UserInfo[] {
     const sockets = channels.get(channelId);
     if (!sockets) return [];
     return Array.from(sockets)
-        .filter(ws => ws.readyState === WebSocket.OPEN)
-        .map(ws => ({ uid: ws.data.uid, alias: ws.data.alias }));
+        .filter((ws) => ws.readyState === WebSocket.OPEN)
+        .map((ws) => ({ uid: ws.data.uid, alias: ws.data.alias }));
 }
 
 export function getChannelTotal(channelId: string): number {
     const sockets = channels.get(channelId);
     if (!sockets) return 0;
-    return Array.from(sockets).filter(ws => ws.readyState === WebSocket.OPEN).length;
+    return Array.from(sockets).filter((ws) => ws.readyState === WebSocket.OPEN).length;
 }
 
 export function handleJoin(ws: ServerWebSocket<ConnectionMeta>) {
@@ -106,7 +106,7 @@ export async function handleLeave(ws: ServerWebSocket<ConnectionMeta>) {
     }
 
     const fullChannelMsgs = channelGlobalMessages.get(channelId) ?? [];
-    const appendList = fullChannelMsgs.map(item => JSON.parse(item));
+    const appendList = fullChannelMsgs.map((item) => JSON.parse(item));
 
     await db.read();
     const historyRaw = db.data.variables[channelId] || "[]";

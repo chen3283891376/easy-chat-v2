@@ -68,11 +68,13 @@ export const varRoutes = {
             const time = new URL(req.url).searchParams.get("time");
             const sig = new URL(req.url).searchParams.get("sig");
             const nonce = new URL(req.url).searchParams.get("nonce");
-            if (!time || !sig || !nonce) return Response.json({ status: "error", message: "缺少签名认证", data: [] }, { status: 401 });
+            if (!time || !sig || !nonce)
+                return Response.json({ status: "error", message: "缺少签名认证", data: [] }, { status: 401 });
 
             const user = db.data.user_data[username];
             if (!user) return Response.json({ status: "error", message: "无此用户", data: [] }, { status: 401 });
-            if (usedNonce.has(nonce)) return Response.json({ status: "error", message: "请求重复或已过期", data: [] }, { status: 400 });
+            if (usedNonce.has(nonce))
+                return Response.json({ status: "error", message: "请求重复或已过期", data: [] }, { status: 400 });
             if (!checkTimeWindow(time))
                 return Response.json({ status: "error", message: "签名时间不在允许范围", data: [] }, { status: 400 });
             const payload = `${key}|${time}|${nonce}`;

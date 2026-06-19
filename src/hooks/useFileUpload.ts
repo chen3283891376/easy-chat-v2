@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { toast } from "sonner";
-import { calcFileMD5, getOSSUploadParams, formatFileSize, type UploadParam } from "@/lib/upload/utils";
-import { UploadFile } from "@/lib/upload/upload";
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { calcFileMD5, getOSSUploadParams, formatFileSize, type UploadParam } from '@/lib/upload/utils';
+import { UploadFile } from '@/lib/upload/upload';
 
 export interface IFile {
     name: string;
@@ -66,7 +66,7 @@ export function useFileUpload() {
             // 监听进度和取消事件
             const { promise, abort } = UploadFile(file, uploadParam, {
                 onProgress: setUploadProgress,
-                onAbort: () => toast.info("上传已取消"),
+                onAbort: () => toast.info('上传已取消'),
             });
 
             // 保存取消函数
@@ -74,10 +74,10 @@ export function useFileUpload() {
             await promise;
 
             // 提取扩展名并拼接访问链接
-            const ext = file.name.split(".").pop();
-            const link = `https://livefile.xesimg.com/programme/python_assets/${md5}${ext?.length ? `.${ext}` : ""}`;
+            const ext = file.name.split('.').pop();
+            const link = `https://livefile.xesimg.com/programme/python_assets/${md5}${ext?.length ? `.${ext}` : ''}`;
 
-            toast.success("上传成功");
+            toast.success('上传成功');
             return {
                 name: file.name,
                 link,
@@ -85,7 +85,7 @@ export function useFileUpload() {
                 time: new Date().toLocaleString(),
             } as IFile;
         } catch (error) {
-            toast.error((error as Error)?.message ?? "上传失败");
+            toast.error((error as Error)?.message ?? '上传失败');
             throw error;
         } finally {
             // 重置上传状态
