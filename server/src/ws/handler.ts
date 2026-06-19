@@ -7,7 +7,7 @@ import {
     findSocketByUID,
     handleJoin,
     handleLeave,
-    channelGlobalMessages
+    channelGlobalMessages,
 } from "./channel";
 
 export function wsOpen(ws: ServerWebSocket<ConnectionMeta>) {

@@ -149,7 +149,8 @@ export const authRoutes = {
             if (!isValid) return Response.json({ status: "error", message: "认证失败" }, { status: 401 });
             usedNonce.add(nonce);
 
-            if (!db.data.user_data[username]) return Response.json({ status: "error", message: "无此用户" }, { status: 404 });
+            if (!db.data.user_data[username])
+                return Response.json({ status: "error", message: "无此用户" }, { status: 404 });
             db.data.user_data[username].rooms = newRooms;
             await db.write();
             return Response.json({ status: "success", message: "操作成功" });
