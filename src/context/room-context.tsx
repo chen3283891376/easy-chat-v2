@@ -3,6 +3,7 @@ import type { Room } from '@/types/message';
 import { genRoomId } from '../lib/utils';
 import { useUser } from './user-context';
 import { storage } from '../lib/storage';
+import { eventBus } from './event-bus';
 
 interface RoomContextType {
     currentRoom: Room;
@@ -26,6 +27,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         localStorage.setItem('chat-rooms', JSON.stringify(roomList));
     }, [roomList]);
+
+    useEffect(() => {
+        const handler = ({ data }: { data: Room[] }) => {
+            setRoomListState(data);
+        };
+        eventBus.on('changeRooms', handler);
+        return () => eventBus.off('changeRooms', handler);
+    }, []);
 
     const setRoomList = async (rooms: Room[]) => {
         setRoomListState(rooms);
