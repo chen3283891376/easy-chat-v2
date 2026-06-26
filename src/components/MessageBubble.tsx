@@ -14,7 +14,7 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from './ui/context-menu';
-import { DownloadIcon, MessageCircleIcon, QuoteIcon, UndoIcon } from 'lucide-react';
+import { CopyIcon, DownloadIcon, MessageCircleIcon, QuoteIcon, UndoIcon } from 'lucide-react';
 import type { ChatMessage } from '@/types/message';
 import type { IFile } from '@/hooks/useFileUpload';
 import { FileDisplay } from './FileDisplay';
@@ -174,6 +174,16 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
         return { fileData: null, isMedia: false };
     }, [message.type, message.msg]);
 
+    const handleCopy = async () => {
+        if (!message.msg) return;
+        try {
+            await navigator.clipboard.writeText(message.msg);
+            toast.success('消息已复制');
+        } catch (err) {
+            toast.error((err as Error).message || '复制失败');
+        }
+    };
+
     const downloadUrl = useMemo(() => {
         return fileData && fileData.link && fileData.link.includes('python_assets/')
             ? `https://livefile.xesimg.com/programme/python_assets/844958913c304c040803a9d7f79f898e.html?name= ${fileData.name}&file=${fileData.link.split('python_assets/')[1]}`
@@ -261,6 +271,10 @@ export const MessageBubble = ({ message, currentUsername }: MessageBubbleProps) 
                                 </ContextMenuTrigger>
                                 <ContextMenuContent side="bottom">
                                     <ContextMenuGroup>
+                                        <ContextMenuItem onClick={handleCopy}>
+                                            <CopyIcon />
+                                            复制
+                                        </ContextMenuItem>
                                         {!isCurrentUser && currentRoom?.name !== `私聊: ${displayName}` && (
                                             <ContextMenuItem onClick={onClickInvite}>
                                                 <MessageCircleIcon />
