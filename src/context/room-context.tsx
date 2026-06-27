@@ -8,10 +8,14 @@ import { eventBus } from './event-bus';
 interface RoomContextType {
     currentRoom: Room;
     roomList: Room[];
+    editingRoomName: string;
+    setEditingRoomName: (name: string) => void;
+    setEditingRoom: (room: Room | null) => void;
     createRoom: (roomName: string) => Promise<void>;
     joinRoomById: (roomId: string, roomName: string) => Promise<void>;
     switchToRoom: (room: Room) => Promise<void>;
     setRoomList: (rooms: Room[]) => Promise<void>;
+    editRoomName: () => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextType | undefined>(undefined);
@@ -23,6 +27,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         const saved = localStorage.getItem('chat-rooms');
         return saved ? JSON.parse(saved) : [{ id: 'room_default', name: '默认房间' }];
     });
+
+    const [editingRoomName, setEditingRoomName] = useState('');
+    const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
     useEffect(() => {
         localStorage.setItem('chat-rooms', JSON.stringify(roomList));
@@ -52,6 +59,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
     const switchToRoom = async (room: Room) => {
         setCurrentRoom(room);
+        setEditingRoomName(room.name);
     };
 
     const createRoom = async (roomName: string) => {
@@ -74,15 +82,25 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         await switchToRoom(newRoom);
     };
 
+    const editRoomName = async () => {
+        if (editingRoomName === editingRoom?.name) return;
+        const updated = roomList.map(r => (r.id === editingRoom?.id ? { ...r, name: editingRoomName } : r));
+        await setRoomList(updated);
+    };
+
     return (
         <RoomContext.Provider
             value={{
                 currentRoom,
+                editingRoomName,
                 roomList,
+                setEditingRoomName,
+                setEditingRoom,
                 createRoom,
                 joinRoomById,
                 switchToRoom,
                 setRoomList,
+                editRoomName,
             }}
         >
             {children}
